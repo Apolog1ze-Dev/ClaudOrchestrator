@@ -1,5 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+/// Version stamp written into every persisted JSON document. Bump when a
+/// breaking shape change ships, and add a migration in the loader. Files
+/// written before versioning existed deserialize as the current version
+/// (v1 semantics are identical to unversioned files).
+pub const SCHEMA_VERSION: u32 = 1;
+
+pub fn default_schema_version() -> u32 {
+    SCHEMA_VERSION
+}
+
 // ─── Epic ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -52,6 +62,8 @@ pub struct ClarifyingQA {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Epic {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: u32,
     pub id: String,
     pub title: String,
     pub objective: String,
@@ -123,6 +135,8 @@ pub struct TicketScope {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Ticket {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: u32,
     pub id: String,
     pub epic_id: String,
     pub title: String,
@@ -186,6 +200,8 @@ pub struct PhasePlan {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Phase {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: u32,
     pub id: String,
     pub ticket_id: String,
     pub epic_id: String,
@@ -227,6 +243,8 @@ pub struct MermaidDiagram {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Spec {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: u32,
     pub id: String,
     pub epic_id: String,
     pub spec_type: SpecType,

@@ -28,7 +28,9 @@ impl AppState {
         // Load general config from app data dir if it exists
         let general_config_path = app_data_dir.join("general-config.json");
         let general_config = if general_config_path.exists() {
-            read_json::<AppConfig>(&general_config_path).unwrap_or_default()
+            // On corruption the file is quarantined (not overwritten) and we
+            // fall back to defaults instead of failing app startup.
+            read_json_or_quarantine::<AppConfig>(&general_config_path).unwrap_or_default()
         } else {
             AppConfig::default()
         };
@@ -56,7 +58,12 @@ impl AppState {
     pub fn load_config_from_disk(&self, target_dir: &str) -> Result<AppConfig> {
         let path = get_config_path(target_dir);
         if path.exists() {
-            let config: AppConfig = read_json(&path)?;
+            // Corrupt workspace config: quarantine it and fall back to the
+            // general config rather than failing the workspace load.
+            let config: AppConfig = match read_json_or_quarantine(&path) {
+                Ok(c) => c,
+                Err(_) => self.general_config.lock().unwrap().clone(),
+            };
             self.set_config(config.clone());
             Ok(config)
         } else {
@@ -105,7 +112,7 @@ impl AppState {
 
     pub fn load_epic(&self, target_dir: &str, epic_id: &str) -> Result<Epic> {
         let path = get_epic_dir(target_dir, epic_id).join("epic.json");
-        read_json(&path)
+        read_json_or_quarantine(&path)
     }
 
     pub fn list_epics(&self, target_dir: &str) -> Result<Vec<Epic>> {
@@ -119,7 +126,9 @@ impl AppState {
             if entry.file_type()?.is_dir() {
                 let epic_path = entry.path().join("epic.json");
                 if epic_path.exists() {
-                    if let Ok(epic) = read_json::<Epic>(&epic_path) {
+                    // Corrupt files are quarantined + logged by the reader so
+                    // they surface instead of silently vanishing forever.
+                    if let Ok(epic) = read_json_or_quarantine::<Epic>(&epic_path) {
                         epics.push(epic);
                     }
                 }
@@ -149,7 +158,7 @@ impl AppState {
 
     pub fn load_ticket(&self, target_dir: &str, epic_id: &str, ticket_id: &str) -> Result<Ticket> {
         let path = get_ticket_dir(target_dir, epic_id, ticket_id).join("ticket.json");
-        read_json(&path)
+        read_json_or_quarantine(&path)
     }
 
     pub fn list_tickets(&self, target_dir: &str, epic_id: &str) -> Result<Vec<Ticket>> {
@@ -163,7 +172,7 @@ impl AppState {
             if entry.file_type()?.is_dir() {
                 let ticket_path = entry.path().join("ticket.json");
                 if ticket_path.exists() {
-                    if let Ok(ticket) = read_json::<Ticket>(&ticket_path) {
+                    if let Ok(ticket) = read_json_or_quarantine::<Ticket>(&ticket_path) {
                         tickets.push(ticket);
                     }
                 }
@@ -196,7 +205,7 @@ impl AppState {
         phase_id: &str,
     ) -> Result<Phase> {
         let path = get_phase_dir(target_dir, epic_id, ticket_id, phase_id).join("phase.json");
-        read_json(&path)
+        read_json_or_quarantine(&path)
     }
 
     pub fn list_phases(
@@ -215,7 +224,7 @@ impl AppState {
             if entry.file_type()?.is_dir() {
                 let phase_path = entry.path().join("phase.json");
                 if phase_path.exists() {
-                    if let Ok(phase) = read_json::<Phase>(&phase_path) {
+                    if let Ok(phase) = read_json_or_quarantine::<Phase>(&phase_path) {
                         phases.push(phase);
                     }
                 }
@@ -241,13 +250,13 @@ impl AppState {
             SpecType::DesignSpec => "design-spec.md",
             SpecType::Custom => "custom.md",
         };
-        std::fs::write(dir.join(md_filename), &spec.content)?;
+        write_atomic(&dir.join(md_filename), spec.content.as_bytes())?;
         Ok(())
     }
 
     pub fn load_spec(&self, target_dir: &str, epic_id: &str, spec_id: &str) -> Result<Spec> {
         let path = get_specs_dir(target_dir, epic_id).join(format!("{}.json", spec_id));
-        read_json(&path)
+        read_json_or_quarantine(&path)
     }
 
     pub fn list_specs(&self, target_dir: &str, epic_id: &str) -> Result<Vec<Spec>> {
@@ -260,7 +269,7 @@ impl AppState {
             let entry = entry?;
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) == Some("json") {
-                if let Ok(spec) = read_json::<Spec>(&path) {
+                if let Ok(spec) = read_json_or_quarantine::<Spec>(&path) {
                     specs.push(spec);
                 }
             }

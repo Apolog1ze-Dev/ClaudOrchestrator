@@ -27,6 +27,7 @@ pub fn create_epic(
     let id = format!("epic_{}", &uuid::Uuid::new_v4().to_string()[..8]);
 
     let epic = Epic {
+        schema_version: crate::types::epic::SCHEMA_VERSION,
         id: id.clone(),
         title: String::new(),
         objective,

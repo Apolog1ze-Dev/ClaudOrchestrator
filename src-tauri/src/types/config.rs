@@ -435,6 +435,8 @@ impl Default for PlanningDetail {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
+    #[serde(default = "super::epic::default_schema_version")]
+    pub schema_version: u32,
     pub models: ModelConfig,
     pub execution: ExecutionConfig,
     pub verification: VerificationConfig,
@@ -447,6 +449,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
+            schema_version: super::epic::SCHEMA_VERSION,
             models: ModelConfig::default(),
             execution: ExecutionConfig::default(),
             verification: VerificationConfig::default(),

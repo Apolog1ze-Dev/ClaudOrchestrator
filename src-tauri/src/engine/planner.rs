@@ -141,6 +141,7 @@ pub async fn generate_prd(
     };
 
     Ok(Spec {
+        schema_version: SCHEMA_VERSION,
         id,
         epic_id: epic.id.clone(),
         spec_type: SpecType::Prd,
@@ -200,6 +201,7 @@ pub async fn generate_tech_spec(
     };
 
     Ok(Spec {
+        schema_version: SCHEMA_VERSION,
         id,
         epic_id: epic.id.clone(),
         spec_type: SpecType::TechSpec,
@@ -259,6 +261,7 @@ pub async fn generate_design_spec(
     };
 
     Ok(Spec {
+        schema_version: SCHEMA_VERSION,
         id,
         epic_id: epic.id.clone(),
         spec_type: SpecType::DesignSpec,
@@ -319,6 +322,7 @@ pub async fn decompose_into_tickets(
                 let scope_val = t.get("scope").cloned().unwrap_or(json!({}));
 
                 tickets.push(Ticket {
+                    schema_version: SCHEMA_VERSION,
                     id,
                     epic_id: epic.id.clone(),
                     title: t.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string(),
@@ -433,6 +437,7 @@ pub async fn plan_ticket_phases(
                 let files_to_modify: Vec<FileOperation> = parse_file_operations(p, "files_to_modify");
 
                 phases.push(Phase {
+                    schema_version: SCHEMA_VERSION,
                     id,
                     ticket_id: ticket.id.clone(),
                     epic_id: ticket.epic_id.clone(),
@@ -562,6 +567,7 @@ pub async fn plan_quick(
                 let epic_id_str = tickets.first().map(|t| t.epic_id.clone()).unwrap_or_default();
 
                 let phase = Phase {
+                    schema_version: SCHEMA_VERSION,
                     id,
                     ticket_id: ticket_id.clone(),
                     epic_id: epic_id_str,

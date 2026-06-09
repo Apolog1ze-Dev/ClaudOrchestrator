@@ -52,11 +52,69 @@ pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
     Ok(value)
 }
 
+/// Read JSON; if the file exists but fails to parse, move it aside as
+/// `<name>.corrupt-<timestamp>` so the data is preserved and the failure is
+/// visible, instead of being silently skipped and later overwritten.
+pub fn read_json_or_quarantine<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
+    let content = std::fs::read_to_string(path)?;
+    match serde_json::from_str(&content) {
+        Ok(value) => Ok(value),
+        Err(e) => {
+            let file_name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "file".to_string());
+            let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
+            let quarantine = path.with_file_name(format!("{}.corrupt-{}", file_name, stamp));
+            let moved = std::fs::rename(path, &quarantine).is_ok();
+            eprintln!(
+                "[storage] Corrupt JSON at {}{}: {}",
+                path.display(),
+                if moved {
+                    format!(" (preserved as {})", quarantine.display())
+                } else {
+                    String::new()
+                },
+                e
+            );
+            Err(anyhow::anyhow!(
+                "Corrupt JSON at {}{}: {}",
+                path.display(),
+                if moved {
+                    format!(" — original preserved as {}", quarantine.display())
+                } else {
+                    String::new()
+                },
+                e
+            ))
+        }
+    }
+}
+
 pub fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()> {
+    let content = serde_json::to_string_pretty(value)?;
+    write_atomic(path, content.as_bytes())
+}
+
+/// Write via temp file + rename in the same directory so a crash or power
+/// loss mid-write can never leave a torn/truncated file behind.
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         ensure_dir(parent)?;
     }
-    let content = serde_json::to_string_pretty(value)?;
-    std::fs::write(path, content)?;
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "file".to_string());
+    let tmp = path.with_file_name(format!("{}.tmp", file_name));
+    {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+    }
+    // std::fs::rename replaces the destination atomically on both Windows
+    // (MoveFileExW + MOVEFILE_REPLACE_EXISTING) and POSIX.
+    std::fs::rename(&tmp, path)?;
     Ok(())
 }
