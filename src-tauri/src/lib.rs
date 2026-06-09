@@ -95,6 +95,8 @@ pub fn run() {
             commands::chat_commands::chat_ask,
             commands::chat_commands::chat_refine_check,
             commands::chat_commands::chat_refine_apply,
+            // Usage / budget commands
+            commands::usage_commands::get_usage_summary,
             // Filesystem commands
             commands::filesystem_commands::list_directory_tree,
             commands::filesystem_commands::read_file_text,

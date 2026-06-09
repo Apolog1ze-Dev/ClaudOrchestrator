@@ -1,6 +1,6 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 import type { Epic } from "../types/epic";
-import type { AppConfig, ModelConfig, ClaudeModel, PlanInfo, SubscriptionPlan } from "../types/config";
+import type { AppConfig, ModelConfig, ClaudeModel, PlanInfo, SubscriptionPlan, UsageSummary } from "../types/config";
 import type { FrontendStreamEvent } from "../types/execution";
 
 // ─── System Commands ─────────────────────────────────────────────────────────
@@ -60,6 +60,10 @@ export async function saveConfig(config: AppConfig, targetDir: string): Promise<
 
 export async function loadConfig(targetDir: string): Promise<AppConfig | null> {
   return invoke("load_config", { targetDir });
+}
+
+export async function getUsageSummary(targetDir: string): Promise<UsageSummary> {
+  return invoke("get_usage_summary", { targetDir });
 }
 
 export async function getDefaultConfig(): Promise<AppConfig> {

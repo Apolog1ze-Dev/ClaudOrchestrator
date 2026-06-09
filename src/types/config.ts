@@ -85,6 +85,14 @@ export interface VerificationConfig {
 
 export type PlanningDetail = "detailed" | "quick";
 
+/** Budget settings for subscription agent-credit metering (June 15, 2026+) */
+export interface BudgetConfig {
+  /** Monthly agent (headless) allowance in USD; null = derive from detected plan */
+  monthly_allowance_usd: number | null;
+  /** Warn once month spend crosses this percentage of the allowance */
+  warn_threshold_pct: number;
+}
+
 export interface AppConfig {
   models: ModelConfig;
   execution: ExecutionConfig;
@@ -92,7 +100,41 @@ export interface AppConfig {
   target_dir?: string;
   /** How detailed the phase planning should be */
   planning_detail?: PlanningDetail;
+  budget?: BudgetConfig;
 }
+
+// ─── Usage Ledger ────────────────────────────────────────────────────────────
+// Mirrored from src-tauri/src/storage/usage.rs
+
+export interface TaskSpend {
+  task: string;
+  cost_usd: number;
+}
+
+export interface UsageSummary {
+  /** Calendar month the figures cover, e.g. "2026-06" (UTC) */
+  month: string;
+  month_usd: number;
+  today_usd: number;
+  total_usd: number;
+  by_task_month: TaskSpend[];
+  record_count: number;
+}
+
+/**
+ * Published monthly Agent SDK credit per plan (USD), effective 2026-06-15.
+ * Headless `claude -p` usage (everything this app runs) draws from this pool;
+ * interactive Claude Code sessions do not.
+ */
+export const PLAN_AGENT_ALLOWANCE_USD: Record<SubscriptionPlan, number | null> = {
+  pro: 20,
+  max_5x: 100,
+  max_20x: 200,
+  team: 20,
+  team_premium: 100,
+  enterprise: 20,
+  unknown: null,
+};
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
 

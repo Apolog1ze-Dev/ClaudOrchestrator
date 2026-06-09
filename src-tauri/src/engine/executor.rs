@@ -4,6 +4,7 @@ use serde_json::json;
 use crate::types::*;
 use crate::claude::process::{run_claude_with_callback, ClaudeProcessOptions, StreamCallback};
 use crate::claude::prompts::{create_template_engine, render_prompt};
+use crate::storage::usage::UsageContext;
 
 /// Execute a phase via claude -p with streaming output
 pub async fn execute_phase_streaming(
@@ -58,6 +59,7 @@ pub async fn execute_phase_streaming(
             json_schema: None,
             streaming: true,
             session_resume: None,
+            usage: Some(UsageContext::new("executor", Some(phase.epic_id.clone()))),
         },
         on_event,
     )

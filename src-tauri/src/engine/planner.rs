@@ -7,6 +7,7 @@ use crate::claude::prompts::{
     create_template_engine, render_prompt,
     intent_capture_schema, spec_schema, ticket_decomposition_schema, phase_planning_schema,
 };
+use crate::storage::usage::UsageContext;
 // Scout is no longer called from planner — cached context is passed as parameter
 
 /// Run the intent capture flow: generate clarifying questions
@@ -39,6 +40,7 @@ pub async fn capture_intent(
             json_schema: Some(intent_capture_schema()),
             streaming: true,
             session_resume: None,
+            usage: Some(UsageContext::new("clarify", Some(epic.id.clone()))),
         },
         on_event,
     )
@@ -123,6 +125,7 @@ pub async fn generate_prd(
             json_schema: Some(spec_schema()),
             streaming: true,
             session_resume: None,
+            usage: Some(UsageContext::new("spec_prd", Some(epic.id.clone()))),
         },
         on_event,
     )
@@ -183,6 +186,7 @@ pub async fn generate_tech_spec(
             json_schema: Some(spec_schema()),
             streaming: true,
             session_resume: None,
+            usage: Some(UsageContext::new("spec_tech", Some(epic.id.clone()))),
         },
         on_event,
     )
@@ -243,6 +247,7 @@ pub async fn generate_design_spec(
             json_schema: Some(spec_schema()),
             streaming: true,
             session_resume: None,
+            usage: Some(UsageContext::new("spec_design", Some(epic.id.clone()))),
         },
         on_event,
     )
@@ -307,6 +312,7 @@ pub async fn decompose_into_tickets(
             json_schema: Some(ticket_decomposition_schema()),
             streaming: true,
             session_resume: None,
+            usage: Some(UsageContext::new("decompose", Some(epic.id.clone()))),
         },
         on_event,
     )
@@ -408,6 +414,7 @@ pub async fn plan_ticket_phases(
             json_schema: Some(phase_planning_schema()),
             streaming: true,
             session_resume: None,
+            usage: Some(UsageContext::new("phase_plan", Some(epic_id.to_string()))),
         },
         on_event,
     )
@@ -528,6 +535,7 @@ pub async fn plan_quick(
             json_schema: Some(phase_planning_schema()),
             streaming: true,
             session_resume: None,
+            usage: Some(UsageContext::new("phase_plan_quick", Some(epic_id.to_string()))),
         },
         on_event,
     )

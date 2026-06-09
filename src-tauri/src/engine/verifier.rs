@@ -4,6 +4,7 @@ use serde_json::json;
 use crate::types::*;
 use crate::claude::process::{run_claude, ClaudeProcessOptions};
 use crate::claude::prompts::{create_template_engine, render_prompt, verification_schema};
+use crate::storage::usage::UsageContext;
 
 /// Run the verification pipeline for a phase.
 /// In supervised mode, each shell command is gated by user approval via the ApprovalManager.
@@ -125,6 +126,7 @@ pub async fn verify_phase(
                 json_schema: Some(verification_schema()),
                 streaming: false,
                 session_resume: None,
+                usage: Some(UsageContext::new("verifier_diff", Some(phase.epic_id.clone()))),
             })
             .await?;
 

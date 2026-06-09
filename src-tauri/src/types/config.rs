@@ -433,6 +433,32 @@ impl Default for PlanningDetail {
     }
 }
 
+/// Budget settings for subscription agent-credit metering (from June 15,
+/// 2026, headless `claude -p` usage draws from a separate monthly credit).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BudgetConfig {
+    /// Monthly agent (headless) allowance in USD. None = derive a default
+    /// from the detected subscription plan's published Agent SDK credit.
+    #[serde(default)]
+    pub monthly_allowance_usd: Option<f64>,
+    /// Warn in the UI once month spend crosses this percentage of the allowance.
+    #[serde(default = "default_warn_threshold_pct")]
+    pub warn_threshold_pct: u8,
+}
+
+fn default_warn_threshold_pct() -> u8 {
+    80
+}
+
+impl Default for BudgetConfig {
+    fn default() -> Self {
+        Self {
+            monthly_allowance_usd: None,
+            warn_threshold_pct: 80,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     #[serde(default = "super::epic::default_schema_version")]
@@ -444,6 +470,8 @@ pub struct AppConfig {
     /// How detailed the phase planning should be
     #[serde(default)]
     pub planning_detail: PlanningDetail,
+    #[serde(default)]
+    pub budget: BudgetConfig,
 }
 
 impl Default for AppConfig {
@@ -455,6 +483,7 @@ impl Default for AppConfig {
             verification: VerificationConfig::default(),
             target_dir: None,
             planning_detail: PlanningDetail::default(),
+            budget: BudgetConfig::default(),
         }
     }
 }

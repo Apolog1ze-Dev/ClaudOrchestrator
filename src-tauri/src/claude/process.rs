@@ -144,6 +144,9 @@ pub struct ClaudeProcessOptions {
     pub json_schema: Option<String>,
     pub streaming: bool,
     pub session_resume: Option<String>,
+    /// When set, the call's cost is appended to the workspace usage ledger
+    /// (`.claudorchestrator/usage.jsonl`) attributed to this task/epic.
+    pub usage: Option<crate::storage::usage::UsageContext>,
 }
 
 #[derive(Debug)]
@@ -182,6 +185,7 @@ pub async fn run_claude_with_callback(
     mut on_event: StreamCallback,
 ) -> Result<ClaudeResult> {
     clear_cancel();
+    let started = std::time::Instant::now();
 
     // Pass prompt via stdin to avoid Windows 32K command-line limit (OS error 206).
     // claude -p reads from stdin when "-" is passed as the prompt, or when prompt is piped.
@@ -425,6 +429,24 @@ pub async fn run_claude_with_callback(
             message: error_msg.clone(),
         });
         anyhow::bail!(error_msg);
+    }
+
+    // Record spend in the workspace usage ledger (estimate from the CLI's
+    // result event; failures inside append_usage are logged, never raised).
+    if let Some(ref usage) = opts.usage {
+        crate::storage::usage::append_usage(
+            &opts.working_dir,
+            &crate::storage::usage::UsageRecord {
+                ts: chrono::Utc::now().to_rfc3339(),
+                task: usage.task.clone(),
+                epic_id: usage.epic_id.clone(),
+                model: opts.model_id.clone(),
+                effort: opts.effort.to_cli_arg().to_string(),
+                cost_usd: total_cost,
+                duration_ms: started.elapsed().as_millis() as u64,
+                session_id: session_id.clone(),
+            },
+        );
     }
 
     Ok(ClaudeResult {

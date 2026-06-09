@@ -208,6 +208,7 @@ pub async fn review_phase_work(
             json_schema: None,
             streaming: true,
             session_resume: None,
+            usage: Some(crate::storage::usage::UsageContext::new("phase_review", Some(epic_id.clone()))),
         },
         channel_callback(channel),
     )

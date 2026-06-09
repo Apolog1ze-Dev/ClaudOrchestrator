@@ -4,6 +4,7 @@ use serde_json::json;
 use crate::types::*;
 use crate::claude::process::{run_claude_with_callback, ClaudeProcessOptions, StreamCallback};
 use crate::claude::prompts::{create_template_engine, render_prompt};
+use crate::storage::usage::UsageContext;
 
 /// Attempt to remediate a failed phase
 pub async fn remediate(
@@ -57,6 +58,7 @@ pub async fn remediate(
             json_schema: None,
             streaming: true,
             session_resume,
+            usage: Some(UsageContext::new("remediator", Some(phase.epic_id.clone()))),
         },
         on_event,
     )

@@ -523,6 +523,39 @@ export function SettingsPage() {
             </p>
           </div>
 
+          {/* Monthly agent budget */}
+          <div className="py-3 border-t border-neutral-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-neutral-200">Monthly Agent Budget</p>
+                <p className="text-xs text-neutral-500">
+                  Headless usage allowance in USD (metered separately from interactive
+                  sessions since June 15, 2026). Leave empty to use your plan's published
+                  credit.
+                </p>
+              </div>
+              <input
+                type="number"
+                min={0}
+                step={5}
+                value={config.budget?.monthly_allowance_usd ?? ""}
+                placeholder="auto"
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  const parsed = v === "" ? null : Math.max(0, Number(v));
+                  updateConfig({
+                    ...config,
+                    budget: {
+                      monthly_allowance_usd: parsed === null || Number.isNaN(parsed) ? null : parsed,
+                      warn_threshold_pct: config.budget?.warn_threshold_pct ?? 80,
+                    },
+                  });
+                }}
+                className="w-24 px-3 py-1.5 bg-surface-0 border border-neutral-800 rounded-lg text-sm text-neutral-200 text-right focus:outline-none focus:border-neutral-600"
+              />
+            </div>
+          </div>
+
           {/* Review Gate Toggle */}
           <div className="flex items-center justify-between py-3 border-t border-neutral-800">
             <div>

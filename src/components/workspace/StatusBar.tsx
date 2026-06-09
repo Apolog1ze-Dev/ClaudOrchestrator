@@ -1,4 +1,5 @@
-import { BarChart3, FolderOpen } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BarChart3, FolderOpen, Wallet } from "lucide-react";
 import { useOptionalEpicContext } from "../../contexts/EpicContext";
 import { useConfigStore } from "../../stores/configStore";
 import { useExecutionStore } from "../../stores/executionStore";
@@ -7,6 +8,8 @@ import { useEpicStore } from "../../stores/epicStore";
 import { useChatStore } from "../../stores/chatStore";
 import { cn } from "../../lib/utils";
 import { QuotaCost } from "../ui/QuotaCost";
+import { getUsageSummary } from "../../lib/tauri";
+import { PLAN_AGENT_ALLOWANCE_USD, type UsageSummary } from "../../types/config";
 import { open } from "@tauri-apps/plugin-dialog";
 
 const STEP_LABELS: Record<string, string> = {
@@ -33,9 +36,46 @@ export function StatusBar() {
   const executionRunning = useExecutionStore((s) => s.isRunning);
   const executionCost = useExecutionStore((s) => s.totalCostUsd);
 
+  const planInfo = useConfigStore((s) => s.planInfo);
+  const config = useConfigStore((s) => s.config);
+
   const step = epicCtx?.step ?? null;
   const data = epicCtx?.data ?? null;
   const isProcessing = epicCtx?.isProcessing ?? false;
+
+  // ─── Monthly agent-budget tracking (ledger-based estimate) ───
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
+  useEffect(() => {
+    if (!targetDir) {
+      setUsage(null);
+      return;
+    }
+    let stale = false;
+    const refresh = () => {
+      getUsageSummary(targetDir)
+        .then((s) => { if (!stale) setUsage(s); })
+        .catch(() => { /* ledger may not exist yet */ });
+    };
+    refresh();
+    const interval = setInterval(refresh, 60_000);
+    return () => { stale = true; clearInterval(interval); };
+    // executionCost in deps: refetch the ledger as live runs add cost
+  }, [targetDir, executionCost]);
+
+  const allowance =
+    config.budget?.monthly_allowance_usd ??
+    PLAN_AGENT_ALLOWANCE_USD[planInfo?.plan ?? "unknown"];
+  const warnPct = config.budget?.warn_threshold_pct ?? 80;
+  const monthSpend = usage?.month_usd ?? 0;
+  const spendRatio = allowance ? (monthSpend / allowance) * 100 : null;
+  const budgetColor =
+    spendRatio === null
+      ? "text-neutral-500"
+      : spendRatio >= 100
+        ? "text-red-400"
+        : spendRatio >= warnPct
+          ? "text-amber-400"
+          : "text-neutral-500";
 
   const totalPhases = data
     ? Object.values(data.phases_by_ticket).flat().length
@@ -125,6 +165,21 @@ export function StatusBar() {
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Monthly agent budget (estimate from local ledger) */}
+      {usage && (
+        <>
+          <span
+            className={cn("flex items-center gap-1", budgetColor)}
+            title={`Agent budget this month (local estimate; headless usage is metered separately from interactive Claude Code from June 15, 2026)\nToday: $${usage.today_usd.toFixed(2)} · Month: $${usage.month_usd.toFixed(2)}${allowance ? ` of ~$${allowance}` : ""}`}
+          >
+            <Wallet className="w-3 h-3" />
+            ${monthSpend.toFixed(2)}
+            {allowance ? ` / $${allowance}` : ""}
+          </span>
+          <div className="w-px h-3 bg-neutral-800" />
+        </>
+      )}
 
       {/* Cost */}
       <QuotaCost costUsd={cost} />

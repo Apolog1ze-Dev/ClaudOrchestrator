@@ -79,6 +79,7 @@ pub async fn start_scouting(
                     json_schema: None,
                     streaming: false,
                     session_resume: None,
+                    usage: Some(crate::storage::usage::UsageContext::new("title", Some(epic_id.clone()))),
                 },
             ).await;
 
@@ -587,6 +588,7 @@ pub async fn review_plan_coherency(
             json_schema: None,
             streaming: true,
             session_resume: None,
+            usage: Some(crate::storage::usage::UsageContext::new("plan_review", Some(epic_id.clone()))),
         },
         channel_callback(channel),
     )
@@ -647,6 +649,7 @@ pub async fn generate_plan_questionnaire(
             json_schema: Some(crate::claude::prompts::plan_questionnaire_schema()),
             streaming: true,
             session_resume: None,
+            usage: Some(crate::storage::usage::UsageContext::new("plan_questionnaire", Some(epic_id.clone()))),
         },
         channel_callback(channel),
     )

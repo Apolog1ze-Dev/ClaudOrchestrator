@@ -1,7 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Plus, BarChart3, Clock } from "lucide-react";
+import { Plus, BarChart3, Clock, Wallet, X } from "lucide-react";
 import { useEpicStore } from "../stores/epicStore";
 import { useConfigStore } from "../stores/configStore";
 import { listEpics } from "../lib/tauri";
@@ -82,12 +82,17 @@ function EpicCard({ epic }: { epic: Epic }) {
   );
 }
 
+const METERING_NOTICE_KEY = "metering_notice_2026_06_dismissed";
+
 export function Dashboard() {
   const navigate = useNavigate();
   const epics = useEpicStore((s) => s.epics);
   const setEpics = useEpicStore((s) => s.setEpics);
   const targetDir = useConfigStore((s) => s.targetDir);
   const claudeInstalled = useConfigStore((s) => s.claudeInstalled);
+  const [meteringNoticeDismissed, setMeteringNoticeDismissed] = useState(
+    () => localStorage.getItem(METERING_NOTICE_KEY) === "1"
+  );
 
   useEffect(() => {
     if (targetDir) {
@@ -126,6 +131,42 @@ export function Dashboard() {
           </div>
         </motion.button>
       </div>
+
+      {/* Agent-credit metering notice (June 15, 2026) */}
+      {!meteringNoticeDismissed && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl text-sm text-blue-200/90"
+        >
+          <div className="flex items-start gap-3">
+            <Wallet className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium text-blue-300 mb-1">
+                Claude metering change — June 15, 2026
+              </p>
+              <p className="leading-relaxed text-blue-200/80">
+                From June 15, headless usage (everything this app runs) draws from a
+                separate monthly agent credit on your subscription: $20 on Pro, $100 on
+                Max 5x, $200 on Max 20x. When it runs out, requests halt unless usage
+                credits are enabled (then standard API rates apply). Interactive Claude
+                Code sessions are unaffected. The status bar now tracks this month's
+                estimated agent spend.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.setItem(METERING_NOTICE_KEY, "1");
+                setMeteringNoticeDismissed(true);
+              }}
+              className="text-blue-400/60 hover:text-blue-300 transition-colors flex-shrink-0"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </motion.div>
+      )}
 
       {/* Status warning */}
       {!claudeInstalled && (
