@@ -507,6 +507,12 @@ const SCOUT_TEMPLATE: &str = r#"You are a codebase analysis specialist. Analyze 
 ## Project Directory
 {{target_dir}}
 
+## Hard Constraints
+- You ONLY have the Read, Glob, and Grep tools. There is no Bash, no shell, and no other execution tool — do not attempt to run commands; a denied tool call means it does not exist.
+- NEVER read or glob ANY path outside the project directory above. User home directories, `.claude` folders, OS paths, and sibling projects are strictly off limits — they contain unrelated data that will mislead your analysis.
+- Skip `.git/`, `node_modules/`, `target/`, `dist/`, and `.claudorchestrator/` (that last one is this orchestrator's own state, not project code).
+- If the directory is empty or nearly empty, do not go hunting elsewhere: simply report that this is a fresh project with no existing code, list whatever few files do exist, and stop. A short, accurate report is the correct output for an empty project.
+
 ## Your Task
 Analyze the codebase and produce a structured report covering:
 1. **Languages & Frameworks**: What languages, frameworks, and major libraries are used
@@ -518,7 +524,7 @@ Analyze the codebase and produce a structured report covering:
 7. **Key Abstractions**: Important interfaces, base classes, utilities
 8. **Entry Points**: Main files, route definitions, API endpoints
 
-Be thorough but concise. Focus on information that would help a developer implement new features correctly.
+Base every claim on files you actually read inside the project directory. Be thorough but concise. Focus on information that would help a developer implement new features correctly.
 "#;
 
 // ─── Phase Review (coherency/consistency check between phases) ───────────────

@@ -96,6 +96,8 @@ interface ConfigStore {
 
   setConfig: (config: AppConfig) => void;
   setGeneralConfig: (config: AppConfig) => void;
+  /** Mark the config as user-customized so plan-preset detection never overwrites it */
+  markConfigCustom: () => void;
   setSettingsScope: (scope: SettingsScope) => void;
   setTargetDir: (dir: string | null) => void;
   addRecentProject: (path: string) => void;
@@ -140,6 +142,7 @@ export const useConfigStore = create<ConfigStore>()(
 
   setConfig: (config) => set({ config }),
   setGeneralConfig: (config) => set({ generalConfig: config }),
+  markConfigCustom: () => set({ isCustomConfig: true }),
   setSettingsScope: (scope) => set({ settingsScope: scope }),
   setTargetDir: (dir) => set({ targetDir: dir }),
 

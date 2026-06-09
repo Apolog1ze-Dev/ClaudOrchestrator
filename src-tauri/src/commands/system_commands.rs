@@ -154,33 +154,31 @@ pub fn get_available_models() -> Vec<ClaudeModel> {
 
 #[tauri::command]
 pub async fn detect_subscription_plan() -> Result<PlanInfo, String> {
-    let default_check = claude_command()
-        .args(["-p", "ok", "--output-format", "json", "--model", "default"])
-        .output();
+    // `claude auth status` reports the subscription tier directly and costs
+    // nothing. (The previous implementation burned two real "ok" prompts per
+    // app start and inferred the plan from which model answered — both
+    // quota-wasteful and nondeterministic under transient failures.)
+    let output = claude_command()
+        .args(["auth", "status"])
+        .output()
+        .map_err(|e| format!("Failed to run claude auth status: {}", e))?;
 
-    let has_default_opus = match default_check {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            stdout.contains("opus")
-        }
-        Err(_) => false,
-    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap_or_default();
+    let subscription = json
+        .get("subscriptionType")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
-    let opus_check = claude_command()
-        .args(["-p", "ok", "--output-format", "json", "--model", "opus"])
-        .output();
-
-    let opus_available = match opus_check {
-        Ok(output) => output.status.success(),
-        Err(_) => false,
-    };
-
-    let plan = if has_default_opus && opus_available {
-        SubscriptionPlan::Max20x
-    } else if opus_available {
-        SubscriptionPlan::Pro
-    } else {
-        SubscriptionPlan::Team
+    let plan = match subscription {
+        "pro" => SubscriptionPlan::Pro,
+        // auth status does not distinguish Max 5x from Max 20x. Assume the
+        // lower tier so budget estimates stay conservative — the monthly
+        // allowance can be corrected in Settings.
+        "max" => SubscriptionPlan::Max5x,
+        "team" => SubscriptionPlan::Team,
+        "enterprise" => SubscriptionPlan::Enterprise,
+        _ => SubscriptionPlan::Unknown,
     };
 
     Ok(plan_info(&plan))

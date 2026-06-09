@@ -242,20 +242,24 @@ async fn run_command_check(command: &str, working_dir: &str) -> (bool, String) {
     }
 }
 
-/// Get the current git diff, routed through platform shell
+/// Get the current git diff, routed through platform shell.
+/// The orchestrator's own state dir is excluded so epic/spec/usage JSON
+/// never pollutes the AI diff review.
 async fn get_git_diff(working_dir: &str) -> Result<String> {
     use tokio::process::Command;
 
+    const DIFF_CMD: &str = "git diff HEAD -- . :!.claudorchestrator";
+
     #[cfg(target_os = "windows")]
     let output = Command::new("cmd")
-        .args(["/C", "git diff HEAD"])
+        .args(["/C", DIFF_CMD])
         .current_dir(working_dir)
         .output()
         .await?;
 
     #[cfg(not(target_os = "windows"))]
     let output = Command::new("sh")
-        .args(["-c", "git diff HEAD"])
+        .args(["-c", DIFF_CMD])
         .current_dir(working_dir)
         .output()
         .await?;

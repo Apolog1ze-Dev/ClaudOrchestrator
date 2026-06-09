@@ -197,7 +197,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   setApplyingChanges: (v) => set({ isApplyingChanges: v }),
   setReviewingCoherency: (v) => set({ isReviewingCoherency: v }),
 
-  injectActivityMessage: (content, label, type = "activity") =>
+  injectActivityMessage: (content, label, type = "activity") => {
     set((s) => ({
       messages: [
         ...s.messages,
@@ -210,11 +210,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           activityLabel: label,
         },
       ],
-    })),
+    }));
+    const state = get();
+    if (state._targetDir && state._epicId) {
+      scheduleSave(state, state._targetDir, state._epicId);
+    }
+  },
 
   setAgentWorking: (working) => set({ isAgentWorking: working }),
 
-  injectObjective: (objective) =>
+  injectObjective: (objective) => {
     set((s) => {
       if (s.messages.some((m) => m.messageType === "objective")) return s;
       return {
@@ -229,7 +234,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           ...s.messages,
         ],
       };
-    }),
+    });
+    const state = get();
+    if (state._targetDir && state._epicId) {
+      scheduleSave(state, state._targetDir, state._epicId);
+    }
+  },
 
   injectProgress: (label, step, progressType) => {
     const message: ChatMessage = {
@@ -245,6 +255,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       appendMessageToSessionOnDisk(state._targetDir, state._epicId, state.epicSessionId, message);
     } else {
       set((s) => ({ messages: [...s.messages, message] }));
+      if (state._targetDir && state._epicId) {
+        scheduleSave(get(), state._targetDir, state._epicId);
+      }
     }
   },
 
@@ -267,6 +280,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         }
         return { messages: [...s.messages, message] };
       });
+      if (state._targetDir && state._epicId) {
+        scheduleSave(get(), state._targetDir, state._epicId);
+      }
     }
   },
 
@@ -283,6 +299,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       appendMessageToSessionOnDisk(state._targetDir, state._epicId, state.epicSessionId, message);
     } else {
       set((s) => ({ messages: [...s.messages, message] }));
+      if (state._targetDir && state._epicId) {
+        scheduleSave(get(), state._targetDir, state._epicId);
+      }
     }
   },
 

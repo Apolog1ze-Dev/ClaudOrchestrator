@@ -46,6 +46,20 @@ pub fn ensure_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Drop a `.gitignore` containing `*` inside the orchestrator state dir so
+/// epics/specs/usage data never pollute the target project's git status or
+/// the verifier's `git diff` review. Idempotent; never overwrites.
+pub fn ensure_state_dir_ignored(target_dir: &str) {
+    let dir = get_orchestrator_dir(target_dir);
+    let gitignore = dir.join(".gitignore");
+    if gitignore.exists() {
+        return;
+    }
+    if ensure_dir(&dir).is_ok() {
+        let _ = std::fs::write(&gitignore, "*\n");
+    }
+}
+
 pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
     let content = std::fs::read_to_string(path)?;
     let value = serde_json::from_str(&content)?;

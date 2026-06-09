@@ -171,11 +171,11 @@ pub async fn review_phase_work(
         }))
         .collect();
 
-    // Get git diff for the phase
+    // Get git diff for the phase (orchestrator state dir excluded)
     let git_diff = {
         use tokio::process::Command;
         let output = Command::new("git")
-            .args(["diff", "HEAD"])
+            .args(["diff", "HEAD", "--", ".", ":!.claudorchestrator"])
             .current_dir(&target_dir)
             .output()
             .await

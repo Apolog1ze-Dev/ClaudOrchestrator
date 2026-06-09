@@ -286,6 +286,9 @@ export function SettingsPage() {
 
   // Auto-save: update store AND persist to disk immediately on every change
   const updateConfig = (newConfig: typeof config) => {
+    // Any manual settings edit marks the config as custom — otherwise async
+    // plan detection (applyPlanPreset) silently overwrites user-chosen models.
+    useConfigStore.getState().markConfigCustom();
     if (settingsScope === "general") {
       setGeneralConfig(newConfig);
       saveGeneralConfig(newConfig).catch((e) =>

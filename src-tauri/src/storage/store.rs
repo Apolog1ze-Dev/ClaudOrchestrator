@@ -75,6 +75,7 @@ impl AppState {
     }
 
     pub fn save_config_to_disk(&self, target_dir: &str) -> Result<()> {
+        ensure_state_dir_ignored(target_dir);
         let config = self.get_config();
         let path = get_config_path(target_dir);
         write_json(&path, &config)?;
@@ -101,6 +102,7 @@ impl AppState {
     // ─── Epic CRUD ───────────────────────────────────────────────────
 
     pub fn save_epic(&self, target_dir: &str, epic: &Epic) -> Result<()> {
+        ensure_state_dir_ignored(target_dir);
         let dir = get_epic_dir(target_dir, &epic.id);
         ensure_dir(&dir)?;
         ensure_dir(&dir.join("specs"))?;
