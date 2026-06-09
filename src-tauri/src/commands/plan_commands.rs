@@ -99,16 +99,21 @@ pub async fn start_scouting(
         message: "Generating clarifying questions...".to_string(),
     }).map_err(|e| e.to_string())?;
 
-    // Generate initial clarifying questions
+    // Generate initial clarifying questions (opens the clarify conversation)
     let epic = state.load_epic(&target_dir, &epic_id).map_err(|e| e.to_string())?;
-    let questions = planner::capture_intent(&epic, &config, &target_dir, channel_callback(channel.clone()))
+    let outcome = planner::capture_intent(&epic, &config, &target_dir, channel_callback(channel.clone()))
         .await
         .map_err(|e| e.to_string())?;
 
     // Save questions and advance to clarifying step
     {
         let mut epic = state.load_epic(&target_dir, &epic_id).map_err(|e| e.to_string())?;
-        epic.clarifying_questions = questions;
+        epic.clarifying_questions = outcome.questions;
+        epic.clarify_session_id = outcome.session_id;
+        if outcome.enhanced_objective.is_some() {
+            epic.enhanced_objective = outcome.enhanced_objective;
+        }
+        epic.clarify_complete = outcome.sufficient;
         epic.planning_step = "clarifying".to_string();
         epic.planning_active = false;
         epic.updated_at = chrono::Utc::now().to_rfc3339();
@@ -139,7 +144,119 @@ pub fn submit_answers(
     Ok(epic)
 }
 
-/// Ask for follow-up questions based on existing answers
+/// Shared body for one conversational clarify turn: persist the latest
+/// answers, run a resumed (or fallback stateless) model turn, then append
+/// the new questions and the model's updated understanding.
+async fn run_clarify_turn(
+    state: &AppState,
+    channel: tauri::ipc::Channel<FrontendStreamEvent>,
+    epic_id: &str,
+    target_dir: &str,
+    answers: Option<Vec<ClarifyingQA>>,
+    user_requested_more: bool,
+) -> Result<(), String> {
+    let config = state.get_config();
+
+    // Persist the user's answers first — their input must never depend on
+    // the model call succeeding.
+    let (epic, new_answers) = {
+        let mut epic = state.load_epic(target_dir, epic_id).map_err(|e| e.to_string())?;
+        let previously_answered: std::collections::HashSet<String> = epic
+            .clarifying_questions
+            .iter()
+            .filter(|q| !q.answer.trim().is_empty())
+            .map(|q| q.question.clone())
+            .collect();
+
+        if let Some(answers) = answers {
+            epic.clarifying_questions = answers;
+            epic.updated_at = chrono::Utc::now().to_rfc3339();
+            state.save_epic(target_dir, &epic).map_err(|e| e.to_string())?;
+        }
+
+        let new_answers: Vec<ClarifyingQA> = epic
+            .clarifying_questions
+            .iter()
+            .filter(|q| !q.answer.trim().is_empty() && !previously_answered.contains(&q.question))
+            .cloned()
+            .collect();
+        (epic, new_answers)
+    };
+
+    // Nothing new to react to, model already satisfied, and no explicit ask
+    // for more — persist-only call.
+    if new_answers.is_empty() && !user_requested_more {
+        return Ok(());
+    }
+    if epic.clarify_complete && !user_requested_more {
+        return Ok(());
+    }
+
+    let _ = channel.send(FrontendStreamEvent::Status {
+        message: "Thinking about your next question...".to_string(),
+    });
+
+    let outcome = planner::continue_clarify(
+        &epic,
+        &new_answers,
+        user_requested_more,
+        &config,
+        target_dir,
+        channel_callback(channel.clone()),
+        channel_callback(channel.clone()),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    // Append new questions (exact-text dedup only — conversational memory is
+    // the real dedup now) and record the model's updated understanding.
+    let mut epic = state.load_epic(target_dir, epic_id).map_err(|e| e.to_string())?;
+    for q in outcome.questions {
+        let exists = epic
+            .clarifying_questions
+            .iter()
+            .any(|existing| existing.question.eq_ignore_ascii_case(&q.question));
+        if !exists {
+            epic.clarifying_questions.push(q);
+        }
+    }
+    if outcome.session_id.is_some() {
+        epic.clarify_session_id = outcome.session_id;
+    }
+    if outcome.enhanced_objective.is_some() {
+        epic.enhanced_objective = outcome.enhanced_objective;
+    }
+    epic.clarify_complete = outcome.sufficient;
+    // Round counter is display metadata; increment only after a successful turn.
+    epic.clarification_round += 1;
+    epic.updated_at = chrono::Utc::now().to_rfc3339();
+    state.save_epic(target_dir, &epic).map_err(|e| e.to_string())?;
+
+    let _ = channel.send(FrontendStreamEvent::Status {
+        message: if epic.clarify_complete {
+            "The AI has enough to draft the specs".to_string()
+        } else {
+            "Ready for your answers".to_string()
+        },
+    });
+
+    Ok(())
+}
+
+/// One conversational clarify turn: saves the provided answers, then asks
+/// the model for the next 1-2 questions (or a "sufficient" signal).
+#[tauri::command]
+pub async fn continue_clarification(
+    epic_id: String,
+    target_dir: String,
+    answers: Vec<ClarifyingQA>,
+    state: tauri::State<'_, AppState>,
+    channel: tauri::ipc::Channel<FrontendStreamEvent>,
+) -> Result<(), String> {
+    run_clarify_turn(&state, channel, &epic_id, &target_dir, Some(answers), false).await
+}
+
+/// Ask for follow-up questions based on existing answers ("Ask more")
 #[tauri::command]
 pub async fn request_more_questions(
     epic_id: String,
@@ -147,48 +264,7 @@ pub async fn request_more_questions(
     state: tauri::State<'_, AppState>,
     channel: tauri::ipc::Channel<FrontendStreamEvent>,
 ) -> Result<(), String> {
-    let config = state.get_config();
-
-    // Increment the clarification round before generating new questions
-    {
-        let mut epic = state.load_epic(&target_dir, &epic_id).map_err(|e| e.to_string())?;
-        epic.clarification_round += 1;
-        epic.updated_at = chrono::Utc::now().to_rfc3339();
-        state.save_epic(&target_dir, &epic).map_err(|e| e.to_string())?;
-    }
-
-    let epic = state.load_epic(&target_dir, &epic_id).map_err(|e| e.to_string())?;
-
-    let new_questions = planner::capture_intent(&epic, &config, &target_dir, channel_callback(channel))
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // Append new questions with fuzzy dedup (check if topic is already covered)
-    let mut epic = state.load_epic(&target_dir, &epic_id).map_err(|e| e.to_string())?;
-    for q in new_questions {
-        // Fuzzy dedup: check if any existing question covers the same topic
-        // (case-insensitive substring match on keywords)
-        let q_lower = q.question.to_lowercase();
-        let is_duplicate = epic.clarifying_questions.iter().any(|existing| {
-            let e_lower = existing.question.to_lowercase();
-            // Exact match
-            if e_lower == q_lower { return true; }
-            // Check for key topic overlap (experience/skill level)
-            let experience_words = ["experience level", "how experienced", "technical background", "skill level", "familiarity with"];
-            if experience_words.iter().any(|w| q_lower.contains(w)) && experience_words.iter().any(|w| e_lower.contains(w)) {
-                return true;
-            }
-            false
-        });
-
-        if !is_duplicate {
-            epic.clarifying_questions.push(q);
-        }
-    }
-    epic.updated_at = chrono::Utc::now().to_rfc3339();
-    state.save_epic(&target_dir, &epic).map_err(|e| e.to_string())?;
-
-    Ok(())
+    run_clarify_turn(&state, channel, &epic_id, &target_dir, None, true).await
 }
 
 // ─── Step 3: Generate Specs ─────────────────────────────────────────────────

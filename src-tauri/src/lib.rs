@@ -64,6 +64,7 @@ pub fn run() {
             commands::plan_commands::start_scouting,
             commands::plan_commands::submit_answers,
             commands::plan_commands::request_more_questions,
+            commands::plan_commands::continue_clarification,
             commands::plan_commands::generate_specs,
             commands::plan_commands::regenerate_spec,
             commands::plan_commands::approve_specs,

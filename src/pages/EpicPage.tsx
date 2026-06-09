@@ -23,6 +23,7 @@ import {
   deleteEpic,
   startScouting,
   submitAnswers,
+  continueClarification,
   requestMoreQuestions,
   generateSpecs,
   approveSpecs,
@@ -137,30 +138,27 @@ export function EpicPage() {
   const handleSubmitAnswers = async (answers: ClarifyingQA[]) => {
     if (!epicId || !targetDir) return;
     try {
+      // One conversational turn: the backend persists the answers, then the
+      // model (resuming its clarify session) either asks the next 1-2
+      // questions or signals it has enough.
+      const alreadyComplete = data?.epic.clarify_complete === true;
+      const previouslyAnswered = new Set(
+        (data?.epic.clarifying_questions ?? [])
+          .filter((q) => q.answer?.trim())
+          .map((q) => q.question)
+      );
+      const hasNewAnswer = answers.some(
+        (a) => a.answer.trim() && !previouslyAnswered.has(a.question)
+      );
+      if (hasNewAnswer && !alreadyComplete) {
+        setIsProcessing(true);
+        await continueClarification(epicId, targetDir, answers, addEvent);
+        await reload();
+        setIsProcessing(false);
+        return;
+      }
+
       await submitAnswers(epicId, targetDir, answers);
-
-      const answeredCount = answers.filter((a) => a.answer.trim()).length;
-      const totalQuestions = answers.length;
-
-      // After Round 1 (experience question answered), auto-trigger Round 2 (concept/features)
-      if (answeredCount === 1 && totalQuestions === 1) {
-        setIsProcessing(true);
-        await requestMoreQuestions(epicId, targetDir, addEvent); // Round 2
-        await reload();
-        setIsProcessing(false);
-        return;
-      }
-
-      // After all Round 2 questions answered, auto-trigger Round 3 (design)
-      // Round 2 generates ~4-6 questions, so total would be ~5-7 after Round 1
-      if (answeredCount === totalQuestions && totalQuestions > 1 && totalQuestions <= 8) {
-        setIsProcessing(true);
-        await requestMoreQuestions(epicId, targetDir, addEvent); // Round 3
-        await reload();
-        setIsProcessing(false);
-        return;
-      }
-
       await reload();
     } catch (e) {
       setError(String(e));
@@ -630,6 +628,7 @@ export function EpicPage() {
           onRequestMore={handleRequestMoreQuestions}
           onDone={handleGenerateSpecs}
           isGenerating={isProcessing}
+          aiSatisfied={epic.clarify_complete === true}
         />
       )}
 

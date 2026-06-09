@@ -504,6 +504,7 @@ export function StreamView() {
                 onRequestMore={epicCtx!.handleRequestMoreQuestions}
                 onDone={epicCtx!.handleGenerateSpecs}
                 isGenerating={isProcessing}
+                aiSatisfied={data!.epic.clarify_complete === true}
               />
             </div>
           </div>

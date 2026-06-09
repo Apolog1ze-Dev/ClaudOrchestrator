@@ -8,6 +8,7 @@ pub fn create_template_engine() -> Result<Handlebars<'static>> {
     hbs.set_strict_mode(false);
 
     hbs.register_template_string("intent_capture", INTENT_CAPTURE_TEMPLATE)?;
+    hbs.register_template_string("clarify_continue", CLARIFY_CONTINUE_TEMPLATE)?;
     hbs.register_template_string("spec_prd", SPEC_PRD_TEMPLATE)?;
     hbs.register_template_string("spec_tech", SPEC_TECH_TEMPLATE)?;
     hbs.register_template_string("decomposer", DECOMPOSER_TEMPLATE)?;
@@ -66,37 +67,15 @@ Current clarification round: {{round}}
 
 You are the **orchestrator planner**. Your job is to probe DEEPLY into the user's vision through multiple rounds of contextual questions. Each round should build on the previous answers and explore new dimensions.
 
-## CRITICAL: Multi-round question generation
+## CRITICAL: This opening turn
 
-**Round 1 — Experience Assessment (round=1):**
-Generate ONLY 1 question: ask about the user's technical experience level with the technologies relevant to this project. This MUST be the only question. Do NOT generate any other questions yet.
+This is the FIRST turn of a live, turn-by-turn conversation. Right now, generate ONLY 1 question: ask about the user's technical experience level with the technologies relevant to this project (topic: "experience"). This MUST be the only question.
 
-**Round 2 — Concept & Feature Exploration (round=2):**
-Now you know the user's tech level. Generate 4-6 questions exploring the CONCEPT and FEATURES:
-- **Core features**: What are the must-have vs nice-to-have features? Propose feature bundles.
-- **User flows**: What are the key user journeys? Who are the target users?
-- **Connections & integrations**: What external systems, APIs, or data sources are involved?
-- **Pitfalls & risks**: Proactively identify potential issues and ask the user about them
-- **Complexity trade-offs**: Propose simpler alternatives for complex features, let the user choose
-- **Novel features**: Based on the objective, propose 1-2 features the user might not have considered
+After each of the user's answers, you will be asked — in this same session — for the next 1-2 most valuable questions, so do NOT plan or announce numbered rounds. The conversation will naturally cover concept and features first, then design (ONLY if this project has a user interface — skip design questions entirely for CLIs, libraries, and backends), then deeper edge cases. When you have enough to write an excellent spec, you will signal status="sufficient" instead of padding with low-value questions.
 
-Adapt language to their tech level. Beginners get plain language with explained options. Experts get precise technical options.
+Adapt language to the user's tech level once known. Beginners get plain language with explained options; experts get precise technical options.
 
-**Round 3 — Design & Visual Identity (round=3):**
-Based on ALL previous answers (concept + features + tech level), generate 4-6 DESIGN questions:
-- **Visual style**: Propose specific styles that FIT the concept described in Round 2
-- **Color palette**: Generate a COMPLETE palette (primary, secondary, accent, background, surface, text colors). Each option should include MULTIPLE colors with hex codes. Use the "palette" field with an array of {name, hex} objects.
-- **Typography & spacing**: Propose specific font pairings and density
-- **Animation & interactions**: Based on the app type from Round 2
-- **Component style**: Based on the tech stack from the codebase context
-- **Feel & personality**: Is the app playful, professional, minimal, data-dense, artistic?
-
-**Round 4+ — Deep Dive (round>=4):**
-If the user clicks "Ask more questions", you know everything from previous rounds. Generate 3-5 questions that:
-- Dig deeper into areas where the user's answers were vague
-- Explore edge cases, error handling, accessibility
-- Ask about deployment, scaling, testing preferences
-- Propose architectural patterns based on what you've learned
+For design questions about color, use the "palette" field with an array of {name, hex} objects covering a COMPLETE palette (background, surface, primary, accent, text, muted).
 
 ## STRICT DEDUP RULE
 NEVER re-ask a question on a topic already covered in previous_answers, even with different wording. For example, if previous_answers includes a question about "experience level", do NOT ask about experience/skill/familiarity again.
@@ -160,6 +139,47 @@ Respond with a JSON object:
     }
   ]
 }
+"##;
+
+// ─── Clarify Continuation (resumed conversation, one turn per user answer) ──
+
+const CLARIFY_CONTINUE_TEMPLATE: &str = r##"{{#if new_answers}}
+The user has just answered:
+{{#each new_answers}}
+**Q:** {{this.question}}
+**A:** {{this.answer}}
+{{/each}}
+{{/if}}
+{{#if user_requested_more}}
+The user explicitly asked for MORE questions — dig deeper into edge cases, error handling, deployment, or anything they were vague about.
+{{/if}}
+{{#if full_history}}
+You are resuming a requirements-gathering session whose conversation memory was lost — everything you need is below.
+
+## Objective
+{{objective}}
+
+{{#if codebase_context}}
+## Codebase Context
+{{codebase_context}}
+{{/if}}
+
+## Full Q&A history so far
+{{#each full_history}}
+**Q:** {{this.question}}
+**A:** {{this.answer}}
+{{/each}}
+{{/if}}
+
+Based on EVERYTHING you now know, do exactly one of the following:
+
+1. If a genuinely valuable question remains — one whose answer would change the spec — produce the next 1-2 questions. Each must build on the answers above; never re-ask a covered topic in any wording. Cover concept/features before design. Only ask design/visual questions if this project actually has a user interface; skip them entirely otherwise. Set status="needs_clarification".
+
+2. If you have enough to write an excellent spec, set status="sufficient" and return an empty questions array. Do not pad with low-value questions.
+
+Always update enhanced_objective: your current best full statement of what the user wants, folding in every answer so far.
+
+Each question needs: 2-4 concrete options (plus a final option {"label": "Let the AI choose the best approach", "description": "Based on your codebase and best practices, the AI will select the optimal solution"}), multi_select, a context line explaining why it matters (reference their previous answers), and a topic field: one of "concept", "design", "deep_dive".
 "##;
 
 // ─── PRD Spec Generation ─────────────────────────────────────────────────────
@@ -1013,7 +1033,11 @@ pub fn intent_capture_schema() -> String {
                             }
                         },
                         "multi_select": { "type": "boolean" },
-                        "context": { "type": "string" }
+                        "context": { "type": "string" },
+                        "topic": {
+                            "type": "string",
+                            "enum": ["experience", "concept", "design", "deep_dive"]
+                        }
                     },
                     "required": ["question", "options", "context"]
                 }

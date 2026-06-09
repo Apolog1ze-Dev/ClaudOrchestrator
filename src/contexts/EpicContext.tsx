@@ -7,6 +7,7 @@ import {
   deleteEpic,
   startScouting,
   submitAnswers,
+  continueClarification,
   requestMoreQuestions,
   generateSpecs,
   approveSpecs,
@@ -281,25 +282,26 @@ export function EpicProvider({ children }: { children: React.ReactNode }) {
   const handleSubmitAnswers = async (answers: ClarifyingQA[]) => {
     if (!epicId || !targetDir) return;
     try {
-      await submitAnswers(epicId, targetDir, answers);
-
-      // Only inject NEWLY answered questions into chat (avoid duplicates)
+      // Mirror NEWLY answered questions into chat (avoid duplicates)
+      let hasNewAnswer = false;
       for (const qa of answers) {
         if (qa.answer.trim() && !prevAnswersRef.current.has(qa.question)) {
           useChatStore.getState().injectClarifyingQA(qa.question, qa.answer);
           prevAnswersRef.current.add(qa.question);
+          hasNewAnswer = true;
         }
       }
 
-      const answeredCount = answers.filter((a) => a.answer.trim()).length;
-      const totalQuestions = answers.length;
-
-      if (answeredCount === 1 && totalQuestions === 1) {
-        useChatStore.getState().injectNarrative("Thanks! Let me generate a few more targeted questions based on your answer.");
+      // One conversational turn: the backend persists the answers, then the
+      // model (resuming its clarify session) either asks the next 1-2
+      // questions or signals it has enough. No more count-based round
+      // heuristics — the model decides when clarification is done.
+      const alreadyComplete = data?.epic.clarify_complete === true;
+      if (hasNewAnswer && !alreadyComplete) {
         setIsProcessing(true);
-        setAgentStatusLabel("Generating follow-up questions...");
+        setAgentStatusLabel("Thinking about the next question...");
         useChatStore.getState().setAgentWorking(true);
-        await requestMoreQuestions(epicId, targetDir, addEvent);
+        await continueClarification(epicId, targetDir, answers, addEvent);
         // Reload BEFORE setting isProcessing false so ClarifyingChat remounts with fresh data
         await reload();
         setIsProcessing(false);
@@ -308,23 +310,13 @@ export function EpicProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (answeredCount === totalQuestions && totalQuestions > 1 && totalQuestions <= 8) {
-        useChatStore.getState().injectNarrative("Got it. Let me see if there's anything else I need to clarify before moving forward.");
-        setIsProcessing(true);
-        setAgentStatusLabel("Generating follow-up questions...");
-        useChatStore.getState().setAgentWorking(true);
-        await requestMoreQuestions(epicId, targetDir, addEvent);
-        await reload();
-        setIsProcessing(false);
-        setAgentStatusLabel(null);
-        useChatStore.getState().setAgentWorking(false);
-        return;
-      }
-
+      await submitAnswers(epicId, targetDir, answers);
       await reload();
     } catch (e) {
       setError(String(e));
       setIsProcessing(false);
+      setAgentStatusLabel(null);
+      useChatStore.getState().setAgentWorking(false);
     }
   };
 

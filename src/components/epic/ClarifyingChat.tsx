@@ -14,7 +14,16 @@ interface ClarifyingChatProps {
   onRequestMore: () => void;
   onDone: () => void;
   isGenerating: boolean;
+  /** The model signaled it has enough to draft the specs */
+  aiSatisfied?: boolean;
 }
+
+const TOPIC_LABELS: Record<string, string> = {
+  experience: "Experience",
+  concept: "Concept & Features",
+  design: "Design",
+  deep_dive: "Deep Dive",
+};
 
 export function ClarifyingChat({
   questions,
@@ -22,6 +31,7 @@ export function ClarifyingChat({
   onRequestMore,
   onDone,
   isGenerating,
+  aiSatisfied = false,
 }: ClarifyingChatProps) {
   const [answers, setAnswers] = useState<Record<number, string>>(() => {
     const initial: Record<number, string> = {};
@@ -117,9 +127,19 @@ export function ClarifyingChat({
 
   return (
     <div className="space-y-2">
-      {unansweredQuestions.map(({ q, i }) => {
+      {unansweredQuestions.map(({ q, i }, idx) => {
         const isActive = activeIndex === i;
         const isColor = hasColorOptions(q);
+        const prevTopic = idx > 0 ? unansweredQuestions[idx - 1].q.topic : undefined;
+        const topicHeader =
+          q.topic && q.topic !== prevTopic ? (
+            <div className="flex items-center gap-2 pt-2 pb-0.5 px-1">
+              <span className="text-[10px] uppercase tracking-wider font-medium text-neutral-600">
+                {TOPIC_LABELS[q.topic] ?? q.topic}
+              </span>
+              <div className="flex-1 h-px bg-neutral-800/60" />
+            </div>
+          ) : null;
 
         // Active question — show options
         if (isActive) {
@@ -127,8 +147,9 @@ export function ClarifyingChat({
           const hasSelection = currentSelections.size > 0 || (showCustom && customInput.trim());
 
           return (
+            <div key={i}>
+            {topicHeader}
             <motion.div
-              key={i}
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               className="rounded-lg border border-emerald-500/20 bg-surface-1 overflow-hidden"
@@ -289,21 +310,47 @@ export function ClarifyingChat({
                 </button>
               </div>
             </motion.div>
+            </div>
           );
         }
 
         // Unanswered but not active — show as pending clickable
         return (
+          <div key={i}>
+          {topicHeader}
           <button
-            key={i}
             onClick={() => { setActiveIndex(i); setShowCustom(false); setCustomInput(""); }}
             className="w-full flex items-start gap-2 py-1.5 px-3 rounded-lg hover:bg-surface-1 transition-colors text-left"
           >
             <MessageSquare className="w-3.5 h-3.5 text-neutral-600 mt-0.5 flex-shrink-0" />
             <p className="text-xs text-neutral-500">{q.question}</p>
           </button>
+          </div>
         );
       })}
+
+      {/* Conversational turn in flight */}
+      {isGenerating && (
+        <div className="flex items-center gap-2 px-3 py-2 text-xs text-neutral-500">
+          <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
+          Thinking about your next question…
+        </div>
+      )}
+
+      {/* Model satisfied banner */}
+      {aiSatisfied && !isGenerating && (
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-start gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2"
+        >
+          <Check className="w-3.5 h-3.5 text-emerald-400 mt-0.5 flex-shrink-0" />
+          <p className="text-[11px] text-emerald-200/90 leading-relaxed">
+            The AI has what it needs to draft the specs. Generate them whenever
+            you're ready — or use "Ask more" to keep refining.
+          </p>
+        </motion.div>
+      )}
 
       {/* Bottom actions — only when all answered */}
       {allAnswered && (

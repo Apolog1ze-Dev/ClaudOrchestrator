@@ -193,6 +193,18 @@ export async function requestMoreQuestions(
   return invoke("request_more_questions", { epicId, targetDir, channel });
 }
 
+// Step 2c: One conversational clarify turn — persists answers, then the
+// model produces the next 1-2 questions or signals it has enough.
+export async function continueClarification(
+  epicId: string,
+  targetDir: string,
+  answers: ClarifyingQA[],
+  onEvent: (event: FrontendStreamEvent) => void
+): Promise<void> {
+  const channel = createStreamChannel(onEvent);
+  return invoke("continue_clarification", { epicId, targetDir, answers, channel });
+}
+
 // Step 3: Generate specs
 export async function generateSpecs(
   epicId: string,

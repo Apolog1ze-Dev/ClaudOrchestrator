@@ -46,6 +46,9 @@ pub fn create_epic(
         codebase_context: None,
         planning_active: false,
         clarification_round: 1,
+        clarify_session_id: None,
+        enhanced_objective: None,
+        clarify_complete: false,
     };
 
     state.save_epic(&target_dir, &epic).map_err(|e| e.to_string())?;

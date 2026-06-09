@@ -58,6 +58,9 @@ pub struct ClarifyingQA {
     /// Whether multiple options can be selected
     #[serde(default)]
     pub multi_select: bool,
+    /// Thematic grouping for UI section headers: experience|concept|design|deep_dive
+    #[serde(default)]
+    pub topic: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,9 +90,18 @@ pub struct Epic {
     /// Whether a planning step is currently running (prevents double-starts)
     #[serde(default)]
     pub planning_active: bool,
-    /// Which clarification round we're on (1=experience, 2=concept, 3=design, 4+=deep dive)
+    /// Which clarification round we're on (display metadata only)
     #[serde(default = "default_clarification_round")]
     pub clarification_round: u32,
+    /// CLI session id of the live clarify conversation (resumed per answer)
+    #[serde(default)]
+    pub clarify_session_id: Option<String>,
+    /// The model's progressively refined statement of the objective
+    #[serde(default)]
+    pub enhanced_objective: Option<String>,
+    /// True once the model signals it has enough to write the spec
+    #[serde(default)]
+    pub clarify_complete: bool,
 }
 
 fn default_clarification_round() -> u32 {

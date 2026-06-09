@@ -47,6 +47,8 @@ export interface ClarifyingQA {
   context: string;
   options: QuestionOption[];
   multi_select: boolean;
+  /** Thematic grouping for section headers: experience|concept|design|deep_dive */
+  topic?: string;
 }
 
 export interface Epic {
@@ -65,6 +67,12 @@ export interface Epic {
   total_estimated_phases: number;
   completed_phases: number;
   total_cost_usd: number;
+  /** CLI session id of the live clarify conversation */
+  clarify_session_id?: string | null;
+  /** The model's progressively refined statement of the objective */
+  enhanced_objective?: string | null;
+  /** True once the model signals it has enough to write the spec */
+  clarify_complete?: boolean;
 }
 
 // ─── Ticket Types ────────────────────────────────────────────────────────────
