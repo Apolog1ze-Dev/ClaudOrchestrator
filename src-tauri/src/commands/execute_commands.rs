@@ -309,7 +309,10 @@ pub async fn run_supervised_epic(
     let config = state.get_config();
     let epic = state.load_epic(&target_dir, &epic_id).map_err(|e| e.to_string())?;
 
-    let tickets = state.list_tickets(&target_dir, &epic_id).map_err(|e| e.to_string())?;
+    // Execute dependencies before dependents; ties keep priority order.
+    let tickets = order_by_dependencies(
+        state.list_tickets(&target_dir, &epic_id).map_err(|e| e.to_string())?,
+    );
     let total_tickets = tickets.len() as u32;
 
     // Clear execution controller flags before starting
@@ -341,9 +344,9 @@ pub async fn run_supervised_epic(
 
         let mut ticket_passed = true;
 
-        for phase in &phases {
+        'phases: for phase in &phases {
             if phase.status == PhaseStatus::Passed {
-                continue; // Already done
+                continue 'phases; // Already done
             }
 
             // ─── Check if user requested stop ───
@@ -354,7 +357,7 @@ pub async fn run_supervised_epic(
                     last_completed_phase_id: None,
                 });
                 stopped_by_user = true;
-                break;
+                break 'phases;
             }
 
             // ─── Phase Start ───
@@ -392,16 +395,19 @@ pub async fn run_supervised_epic(
                         score: 0,
                         cost_usd: 0.0,
                     });
-                    continue;
+                    continue 'phases;
                 }
             }
 
-            // ─── Execute ───
+            // ─── Execute (re-enters on review-gate Retry) ───
+            let mut current_phase = phase.clone();
+            let mut final_passed;
+            'attempt: loop {
+
             let _ = channel.send(FrontendStreamEvent::Status {
                 message: format!("Executing: {}", phase.title),
             });
 
-            let mut current_phase = phase.clone();
             current_phase.status = PhaseStatus::Executing;
             current_phase.updated_at = chrono::Utc::now().to_rfc3339();
             state.save_phase(&target_dir, &epic_id, &ticket.id, &current_phase)
@@ -424,13 +430,18 @@ pub async fn run_supervised_epic(
                         score: 0,
                         cost_usd: 0.0,
                     });
+                    // Persist the failure and halt the ticket — later phases
+                    // build on this one, so continuing compounds the failure.
+                    current_phase.status = PhaseStatus::Failed;
+                    current_phase.updated_at = chrono::Utc::now().to_rfc3339();
+                    let _ = state.save_phase(&target_dir, &epic_id, &ticket.id, &current_phase);
                     ticket_passed = false;
-                    continue;
+                    break 'phases;
                 }
             };
 
             current_phase.execution = Some(execution.clone());
-            current_phase.cost_usd = execution.cost_usd;
+            current_phase.cost_usd += execution.cost_usd;
 
             // ─── Verify ───
             let _ = channel.send(FrontendStreamEvent::Status {
@@ -464,7 +475,7 @@ pub async fn run_supervised_epic(
                 passed,
                 summary: verification.reasoning.clone(),
                 checks: verification.checks.iter().map(|c| {
-                    format!("{}: {} {}", c.name, if c.passed { "PASS" } else { "FAIL" }, c.details)
+                    format!("{}: {} {}", c.name, if c.skipped { "SKIPPED" } else if c.passed { "PASS" } else { "FAIL" }, c.details)
                 }).collect(),
             });
 
@@ -476,7 +487,7 @@ pub async fn run_supervised_epic(
 
                 let gate_id = format!("review-gate-{}", phase.id);
                 let check_summaries: Vec<String> = current_phase.verification.as_ref()
-                    .map(|v| v.checks.iter().map(|c| format!("{}: {} - {}", c.name, if c.passed { "PASS" } else { "FAIL" }, c.details)).collect())
+                    .map(|v| v.checks.iter().map(|c| format!("{}: {} - {}", c.name, if c.skipped { "SKIPPED" } else if c.passed { "PASS" } else { "FAIL" }, c.details)).collect())
                     .unwrap_or_default();
                 let fixes: Vec<String> = current_phase.verification.as_ref()
                     .map(|v| v.suggested_fixes.clone())
@@ -506,7 +517,7 @@ pub async fn run_supervised_epic(
                             score: 0,
                             cost_usd: current_phase.cost_usd,
                         });
-                        continue;
+                        continue 'phases;
                     }
                     ReviewDecision::Reject => {
                         stopped_by_user = true;
@@ -514,26 +525,21 @@ pub async fn run_supervised_epic(
                             reason: "user_rejected".to_string(),
                             last_completed_phase_id: Some(phase.id.clone()),
                         });
-                        break;
+                        break 'phases;
                     }
                     ReviewDecision::Retry => {
-                        // Will be handled by re-running the phase
-                        // For now, mark as failed and let the user retry via the UI
+                        // Re-run the phase now; each retry is an explicit
+                        // user decision at the gate, so no attempt cap.
                         let _ = channel.send(FrontendStreamEvent::Status {
-                            message: format!("Phase '{}' marked for retry", phase.title),
+                            message: format!("Re-running phase '{}' at user request", phase.title),
                         });
-                        current_phase.status = PhaseStatus::Failed;
-                        current_phase.updated_at = chrono::Utc::now().to_rfc3339();
-                        state.save_phase(&target_dir, &epic_id, &ticket.id, &current_phase)
-                            .map_err(|e| e.to_string())?;
-                        ticket_passed = false;
-                        continue;
+                        continue 'attempt;
                     }
                 }
             }
 
             // ─── Remediate if needed ───
-            let mut final_passed = passed;
+            final_passed = passed;
             if !passed && config.execution.auto_remediate {
                 let max_attempts = config.execution.max_remediation_attempts;
                 for attempt in 1..=max_attempts {
@@ -558,9 +564,13 @@ pub async fn run_supervised_epic(
                         max_attempts,
                     });
 
+                    let rem_verification = match current_phase.verification.clone() {
+                        Some(v) => v,
+                        None => break, // no verification recorded — nothing to remediate against
+                    };
                     let rem_result = remediator::remediate(
                         &current_phase,
-                        current_phase.verification.as_ref().unwrap(),
+                        &rem_verification,
                         &config,
                         &target_dir,
                         channel_callback(channel.clone()),
@@ -591,7 +601,7 @@ pub async fn run_supervised_epic(
                             passed: re_passed,
                             summary: re_verification.reasoning.clone(),
                             checks: re_verification.checks.iter().map(|c| {
-                                format!("{}: {} {}", c.name, if c.passed { "PASS" } else { "FAIL" }, c.details)
+                                format!("{}: {} {}", c.name, if c.skipped { "SKIPPED" } else if c.passed { "PASS" } else { "FAIL" }, c.details)
                             }).collect(),
                         });
 
@@ -607,15 +617,20 @@ pub async fn run_supervised_epic(
                 }
             }
 
+            break 'attempt;
+            } // end 'attempt
+
             // ─── Save final phase state ───
             current_phase.status = if final_passed { PhaseStatus::Passed } else { PhaseStatus::Failed };
             current_phase.updated_at = chrono::Utc::now().to_rfc3339();
             state.save_phase(&target_dir, &epic_id, &ticket.id, &current_phase)
                 .map_err(|e| e.to_string())?;
-            state.save_verification(
-                &target_dir, &epic_id, &ticket.id, &phase.id,
-                current_phase.verification.as_ref().unwrap(),
-            ).map_err(|e| e.to_string())?;
+            if let Some(ref verification) = current_phase.verification {
+                state.save_verification(
+                    &target_dir, &epic_id, &ticket.id, &phase.id,
+                    verification,
+                ).map_err(|e| e.to_string())?;
+            }
 
             let _ = channel.send(FrontendStreamEvent::PhaseCompleted {
                 phase_id: phase.id.clone(),
@@ -625,7 +640,15 @@ pub async fn run_supervised_epic(
             });
 
             if !final_passed {
+                // Halt the ticket: subsequent phases depend on this one.
                 ticket_passed = false;
+                let _ = channel.send(FrontendStreamEvent::Status {
+                    message: format!(
+                        "Ticket '{}' halted: phase '{}' did not pass — remaining phases were not run",
+                        ticket.title, phase.title
+                    ),
+                });
+                break 'phases;
             }
         }
 
@@ -664,4 +687,39 @@ pub async fn run_supervised_epic(
     }
 
     Ok(())
+}
+
+/// Order tickets so dependencies execute before dependents. Stable within a
+/// "ready" wave, so ties keep the storage layer's priority order. Tickets in
+/// a dependency cycle (or depending on unknown ids in a cycle-like way) are
+/// appended in their original order rather than dropped.
+fn order_by_dependencies(tickets: Vec<Ticket>) -> Vec<Ticket> {
+    use std::collections::HashSet;
+
+    let known_ids: HashSet<String> = tickets.iter().map(|t| t.id.clone()).collect();
+    let mut ordered: Vec<Ticket> = Vec::with_capacity(tickets.len());
+    let mut placed: HashSet<String> = HashSet::new();
+    let mut remaining = tickets;
+
+    while !remaining.is_empty() {
+        let (ready, rest): (Vec<Ticket>, Vec<Ticket>) = remaining.into_iter().partition(|t| {
+            t.dependencies
+                .iter()
+                .all(|dep| placed.contains(dep) || !known_ids.contains(dep))
+        });
+
+        if ready.is_empty() {
+            // Cycle: nothing can be placed — fall back to original order.
+            ordered.extend(rest);
+            break;
+        }
+
+        for t in ready {
+            placed.insert(t.id.clone());
+            ordered.push(t);
+        }
+        remaining = rest;
+    }
+
+    ordered
 }

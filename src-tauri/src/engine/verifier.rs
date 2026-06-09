@@ -22,73 +22,82 @@ pub async fn verify_phase(
     // 1. Run automated checks if configured
     if config.verification.run_tests {
         let cmd = &config.verification.test_command;
-        let (passed, details) = if supervised {
+        let (passed, details, skipped) = if supervised {
             let req_id = format!("verify-{}-tests", phase.id);
             let approved = approval_manager.request_approval(
                 &req_id, cmd, "verification", &phase.id, channel,
             ).await;
             if approved {
-                run_command_check(cmd, target_dir).await
+                let (p, d) = run_command_check(cmd, target_dir).await;
+                (p, d, false)
             } else {
-                (true, "Skipped by user".to_string())
+                (false, "Skipped by user (approval denied)".to_string(), true)
             }
         } else {
-            run_command_check(cmd, target_dir).await
+            let (p, d) = run_command_check(cmd, target_dir).await;
+            (p, d, false)
         };
         checks.push(VerificationCheck {
             name: "Tests".to_string(),
             check_type: CheckType::Test,
             passed,
             details,
-            severity: if passed { Severity::Info } else { Severity::Error },
+            severity: if passed || skipped { Severity::Info } else { Severity::Error },
+            skipped,
         });
     }
 
     if config.verification.run_lint {
         let cmd = &config.verification.lint_command;
-        let (passed, details) = if supervised {
+        let (passed, details, skipped) = if supervised {
             let req_id = format!("verify-{}-lint", phase.id);
             let approved = approval_manager.request_approval(
                 &req_id, cmd, "verification", &phase.id, channel,
             ).await;
             if approved {
-                run_command_check(cmd, target_dir).await
+                let (p, d) = run_command_check(cmd, target_dir).await;
+                (p, d, false)
             } else {
-                (true, "Skipped by user".to_string())
+                (false, "Skipped by user (approval denied)".to_string(), true)
             }
         } else {
-            run_command_check(cmd, target_dir).await
+            let (p, d) = run_command_check(cmd, target_dir).await;
+            (p, d, false)
         };
         checks.push(VerificationCheck {
             name: "Linting".to_string(),
             check_type: CheckType::Lint,
             passed,
             details,
-            severity: if passed { Severity::Info } else { Severity::Warning },
+            severity: if passed || skipped { Severity::Info } else { Severity::Warning },
+            skipped,
         });
     }
 
     if config.verification.run_typecheck {
         let cmd = &config.verification.typecheck_command;
-        let (passed, details) = if supervised {
+        let (passed, details, skipped) = if supervised {
             let req_id = format!("verify-{}-typecheck", phase.id);
             let approved = approval_manager.request_approval(
                 &req_id, cmd, "verification", &phase.id, channel,
             ).await;
             if approved {
-                run_command_check(cmd, target_dir).await
+                let (p, d) = run_command_check(cmd, target_dir).await;
+                (p, d, false)
             } else {
-                (true, "Skipped by user".to_string())
+                (false, "Skipped by user (approval denied)".to_string(), true)
             }
         } else {
-            run_command_check(cmd, target_dir).await
+            let (p, d) = run_command_check(cmd, target_dir).await;
+            (p, d, false)
         };
         checks.push(VerificationCheck {
             name: "Type Check".to_string(),
             check_type: CheckType::Typecheck,
             passed,
             details,
-            severity: if passed { Severity::Info } else { Severity::Error },
+            severity: if passed || skipped { Severity::Info } else { Severity::Error },
+            skipped,
         });
     }
 
@@ -129,6 +138,7 @@ pub async fn verify_phase(
                             passed: check.get("passed").and_then(|v| v.as_bool()).unwrap_or(false),
                             details: check.get("details").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                             severity: parse_severity(check.get("severity").and_then(|v| v.as_str()).unwrap_or("info")),
+                            skipped: false,
                         });
                     }
                 }
@@ -160,9 +170,12 @@ pub async fn verify_phase(
         }
     }
 
-    // Fallback: calculate score from automated checks only
-    let total = checks.len() as u32;
-    let passed = checks.iter().filter(|c| c.passed).count() as u32;
+    // Fallback: calculate score from automated checks only.
+    // Skipped checks (user declined approval) are excluded from the
+    // denominator — declining a check must never count as passing it.
+    let skipped_count = checks.iter().filter(|c| c.skipped).count();
+    let total = checks.iter().filter(|c| !c.skipped).count() as u32;
+    let passed = checks.iter().filter(|c| !c.skipped && c.passed).count() as u32;
     let overall_score = if total > 0 { (passed * 100) / total } else { 100 };
 
     let status = if overall_score >= config.verification.minimum_score {
@@ -171,11 +184,20 @@ pub async fn verify_phase(
         VerificationStatus::Failed
     };
 
+    let reasoning = if skipped_count > 0 {
+        format!(
+            "{}/{} checks passed ({} skipped by user and not counted)",
+            passed, total, skipped_count
+        )
+    } else {
+        format!("{}/{} checks passed", passed, total)
+    };
+
     Ok(PhaseVerification {
         status,
         checks,
         overall_score,
-        reasoning: format!("{}/{} checks passed", passed, total),
+        reasoning,
         suggested_fixes: Vec::new(),
         verified_at: chrono::Utc::now().to_rfc3339(),
     })

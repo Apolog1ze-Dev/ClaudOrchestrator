@@ -34,6 +34,10 @@ pub struct VerificationCheck {
     pub passed: bool,
     pub details: String,
     pub severity: Severity,
+    /// True when the user declined to run this check (approval denied).
+    /// Skipped checks are excluded from scoring — they never count as passed.
+    #[serde(default)]
+    pub skipped: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

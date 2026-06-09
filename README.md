@@ -1,6 +1,6 @@
 # ClaudOrchestrator
 
-> **Free** AI-powered development orchestrator that plugs directly into your existing **Claude Code subscription** — no extra API keys, no extra costs.
+> **Free** AI-powered development orchestrator that plugs directly into your existing **Claude Code subscription** — no extra API keys.
 
 ClaudOrchestrator is a desktop application that turns high-level project ideas into fully implemented, verified code. It manages a team of specialized Claude AI agents that plan, execute, and validate software development tasks autonomously — all billed through your existing Claude subscription.
 
@@ -12,7 +12,9 @@ ClaudOrchestrator is a desktop application that turns high-level project ideas i
 
 ClaudOrchestrator sits on top of the Claude CLI (Claude Code) you already have installed. It authenticates using your existing Claude session and directs multiple specialized AI agents through a structured pipeline — from understanding your requirements to shipping working code.
 
-No separate API keys. No additional billing. Just your Claude subscription doing more.
+No separate API keys. Usage is billed against your Claude subscription — note that
+Anthropic meters headless/agent usage (which this app uses) under your plan's agent
+allowance, separately from interactive Claude Code sessions.
 
 ---
 
@@ -79,7 +81,7 @@ The spec is editable. You can review it, request refinements through the chat pa
 
 **4. Ticket Decomposition**
 
-The spec is broken into a set of tracked tickets. Each ticket represents a coherent chunk of work — a single service, a UI component, a data migration — with clearly defined scope and explicit dependency links. Tickets can be executed in parallel where dependencies allow.
+The spec is broken into a set of tracked tickets. Each ticket represents a coherent chunk of work — a single service, a UI component, a data migration — with clearly defined scope and explicit dependency links. Tickets execute sequentially in dependency order (dependencies always run before the tickets that need them).
 
 [INSERT SCREENSHOT HERE]
 
@@ -101,7 +103,8 @@ Before execution begins, the orchestrator runs a final review pass over the comp
 
 Once the Epic plan is approved, ClaudOrchestrator drives execution with built-in safeguards.
 
-- **Supervised or Autonomous modes** — choose whether to approve critical operations (especially shell commands) or let the orchestrator run freely
+- **Supervised or Autonomous modes** — supervised mode adds approval gates before each phase build, each verification command, and each remediation attempt; autonomous mode runs everything without asking. Note: within a phase build, the executor agent can run shell commands without per-command prompts in *both* modes — for full command-level control, run phases in your own interactive Claude Code session
+- **Failure halting** — when a phase fails verification, the remaining phases of that ticket are halted instead of building on a broken foundation
 - **Auto-remediation** — when a phase fails, the remediator agent diagnoses and fixes the issue automatically (configurable retry limit)
 - **Verification** — after each phase, a dedicated verifier agent runs your test suite, lint, and type checks, and reviews spec compliance
 - **Review gates** — manual checkpoints where you can inspect work and decide whether to continue
@@ -175,13 +178,14 @@ All project data (epics, tickets, phases, specs) is stored locally on your machi
 
 ## Free to Use
 
-ClaudOrchestrator is **free**. There is no subscription, no license fee, and no usage metering beyond what Claude Code itself already tracks. If you have a Claude subscription, you have everything you need to run the full orchestration pipeline.
+ClaudOrchestrator is **free**. There is no subscription, no license fee, and no usage metering of its own. Model usage is governed by your Claude plan: Anthropic meters headless/agent calls (which this app makes) under a monthly agent allowance per plan, separate from interactive session limits — keep an eye on the in-app cost tracking.
 
 ---
 
 ## Notes & Known Limitations
 
 - Works best on projects with an existing codebase that Claude can scout for context
-- Autonomous mode executes shell commands without prompting — use supervised mode on unfamiliar projects
+- The executor agent has shell access during phase builds in both modes; supervised mode gates phases, verification commands, and remediation — not individual executor commands
+- AI diff review during verification requires the project to be a git repository; without git, verification falls back to the configured test/lint/typecheck commands only
 - Large epics with many tickets will consume quota proportionally; configure effort levels accordingly
 - Auto-update is built in — the app will notify you when a new version is available

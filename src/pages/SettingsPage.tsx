@@ -485,8 +485,8 @@ export function SettingsPage() {
           <div className="py-3 border-t border-neutral-800">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <p className="text-sm text-neutral-200">Command Approval</p>
-                <p className="text-xs text-neutral-500">Control whether shell commands (tests, lint) need your approval before running</p>
+                <p className="text-sm text-neutral-200">Approval Gates</p>
+                <p className="text-xs text-neutral-500">Control whether phase builds, verification commands, and remediation wait for your approval</p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -509,12 +509,18 @@ export function SettingsPage() {
                   <span className="block">{mode === "autonomous" ? "Autonomous" : "Supervised"}</span>
                   <span className="block text-[10px] mt-0.5 font-normal opacity-70">
                     {mode === "autonomous"
-                      ? "Commands run automatically"
-                      : "Approve each command before it runs"}
+                      ? "Everything runs without asking"
+                      : "Approve each phase and verification command"}
                   </span>
                 </button>
               ))}
             </div>
+            <p className="text-[11px] text-amber-400/80 mt-2 leading-relaxed">
+              Note: supervised mode gates phase starts, verification commands, and remediation.
+              During a phase build the executor agent itself can run shell commands without
+              per-command prompts in both modes. For full command-level control, execute
+              phases in your own Claude Code session instead.
+            </p>
           </div>
 
           {/* Review Gate Toggle */}

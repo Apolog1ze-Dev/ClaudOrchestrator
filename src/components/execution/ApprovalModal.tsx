@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { ShieldCheck, Terminal, Play, Wrench, CheckCircle } from "lucide-react";
+import { ShieldCheck, Terminal, Play, Wrench, CheckCircle, AlertTriangle } from "lucide-react";
 import type { ApprovalRequest } from "../../stores/executionStore";
 
 interface ApprovalModalProps {
@@ -30,6 +31,7 @@ const contextLabels: Record<string, { label: string; description: string; icon: 
 export function ApprovalModal({ approval, onApprove, onDeny, onTrustAll }: ApprovalModalProps) {
   const ctx = contextLabels[approval.context] || contextLabels.verification;
   const CtxIcon = ctx.icon;
+  const [confirmingTrustAll, setConfirmingTrustAll] = useState(false);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -66,14 +68,35 @@ export function ApprovalModal({ approval, onApprove, onDeny, onTrustAll }: Appro
 
         <p className="text-xs text-neutral-500 mb-4">{ctx.description}</p>
 
+        {/* Trust-all confirmation warning */}
+        {confirmingTrustAll && (
+          <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 mb-3">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
+            <p className="text-[11px] text-amber-200/90 leading-relaxed">
+              This switches the session to autonomous mode: every remaining phase,
+              verification command, and remediation runs without asking again.
+            </p>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex items-center justify-between">
-          {/* Trust all checkbox */}
+          {/* Trust all — requires a second confirming click */}
           <button
-            onClick={onTrustAll}
-            className="text-[11px] text-neutral-500 hover:text-emerald-400 transition-colors"
+            onClick={() => {
+              if (confirmingTrustAll) {
+                onTrustAll();
+              } else {
+                setConfirmingTrustAll(true);
+              }
+            }}
+            className={
+              confirmingTrustAll
+                ? "text-[11px] font-medium text-amber-400 hover:text-amber-300 transition-colors"
+                : "text-[11px] text-neutral-500 hover:text-emerald-400 transition-colors"
+            }
           >
-            Trust all for this session
+            {confirmingTrustAll ? "Click again to confirm autonomous mode" : "Trust all for this session"}
           </button>
 
           <div className="flex items-center gap-2">
