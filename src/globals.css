@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand colors — Warm Teal */
+  --color-brand-50: #e6f7f3;
+  --color-brand-100: #b3e8db;
+  --color-brand-200: #80d9c3;
+  --color-brand-300: #4dcaab;
+  --color-brand-400: #1bc4a8;
+  --color-brand-500: #15ac91;
+  --color-brand-600: #119478;
+  --color-brand-700: #0d7b5f;
+  --color-brand-800: #096346;
+  --color-brand-900: #054a2d;
+
+  /* Model tier colors */
+  --color-opus: #15ac91;
+  --color-sonnet: #4c9df3;
+  --color-haiku: #e5b95c;
+
+  /* Status colors */
+  --color-status-draft: #7a797a;
+  --color-status-planning: #e5b95c;
+  --color-status-ready: #4c9df3;
+  --color-status-executing: #15ac91;
+  --color-status-verifying: #ea7620;
+  --color-status-completed: #15ac91;
+  --color-status-failed: #f14c4c;
+  --color-status-paused: #7a797a;
+
+  /* Surface colors — warm grays (Cursor-inspired) */
+  --color-surface-0: #181818;
+  --color-surface-1: #1d1d1d;
+  --color-surface-2: #212121;
+  --color-surface-3: #383838;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface-1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #535353;
+}
+
+/* Selection */
+::selection {
+  background-color: rgba(21, 172, 145, 0.3);
+}
+
+/* Prevent text selection during drag */
+.no-select {
+  user-select: none;
+}
+
+/* Terminal-style streaming output */
+.stream-output {
+  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Mermaid diagram container */
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Smooth page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+}

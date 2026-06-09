@@ -1,0 +1,58 @@
+Initial Test Prompt:
+I want to make a website that lets users visualise 3d models they upload and apply shaders that are premade (make up like 5 cool shaders)
+
+
+
+
+
+Final Review phase to see if final output matches initial clarified prompt
+
+
+the clarification phase feels a bit useless at times. First bug is that the experience level question gets asked twice (once alone correctly but then again with the rest (i believe its the app showing it twice and not the AI Model generating it twice))
+
+Some questions, notetably the design questions are all generated at the same time. This means that the color palette suggestion doesnt take into account the style question's answer right before it. Some questions are better asked after the answer of the user from another question to better steer the plans into the right direction
+
+
+
+Bugs & Thoughts:
+
+Remove
+The clarify phase should probe deeper and more smartly the user, ask questions, think, ask more questions with answers in context so that it really ups the quality of the plans <--- STILL NOT DOING THAT
+Last answered question is getting asked again when next questions are being asked
+ENFORCE COMMAND APPROVAL AND MODEL SWITCHING CORRECTLY
+Review cost calculation <- DONE
+"Guided review" review of implementation 
+No review questions at the end of the generation (after tickets phases) + Review gate should be default on and moved into plan settings
+Keep the answered questions in the output <- DONE
+Past output should be accessible <- DONE
+Past chats with assistant should be accessible <- DONE
+History doesnt work <- DONE
+Not too happy with the top bar <- DONE
+Not too happy with no space at the bottom especially file explorer <- DONE
+Not too happy with the color changes in the selection of model effort <- DONE
+Reordering tabs is not working
+Remove YOLO mode and references
+Enforce Plan settings chosen and autoselect when planning phases for tickets instead of asking user with notification
+Verification pipeline should not be user facing
+Remove example prompts in frontend <- DONE
+No hardcoded plan phases but rather gated phases (not every plan/epic needs a design phase etc...) + possible effort estimation to optimise effort put in (if small changes less effort than new software or big changes)
+Regroup shell commands like thoughts for more readable output
+Swap out icons for tastefull svg or remove icons <- DONE
+Global settings and workspace settings
+Project Files empty even in folder that already has files in it
+Plans should be in explorer as they are made
+Auto title EPIC file when it is created
+Auto update <- TO BE TESTED
+About tab info
+
+
+Move status bar to the side with Assistant Chat.Thoughts on keeping it open and making it the place buttons like "Approve" & "Review" might live. Thoughts on having an instance of claude (force Haiku maybe) or just programatically take last answwer of Agent output and put it in the Agent chat that way the user feels like it is a conversation but still has the Agent Output panel view. the button to carry onto the next phase would be put above the text input field for the chat when it is necessary. Review becomes a toggle like Ask & Refine but with the option to send the message empty with a special note that pops up notifying the user they can leave the text input field empty to trigger a review of the current phase or to type/add to chat something to enter guided review mode and have it focus more on what is mentioned. 
+Broadly rethink the agent output panel since it can all be incorporated with minor tweaks in the agent Chat bar instead. Agent Output panel can still be used to ask questions (More space = better visibility of information) but have answered questions appear in the chat (question + answer) <-- DONE
+
+
+Macro Features & Points:
+
+Add simple plan option
+Handoff feature
+look at AI Assesement and ask it to update it
+GIT integration

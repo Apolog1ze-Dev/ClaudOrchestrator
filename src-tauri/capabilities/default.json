@@ -1,0 +1,34 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-utils/schema.json",
+  "identifier": "default",
+  "description": "Default permissions for ClaudOrchestrator",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-spawn",
+    "shell:allow-execute",
+    "shell:allow-stdin-write",
+    "shell:allow-kill",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-message",
+    "dialog:allow-ask",
+    "fs:default",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-exists",
+    "fs:allow-mkdir",
+    "fs:allow-read-dir",
+    "fs:allow-rename",
+    "fs:allow-remove",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "**" }
+      ]
+    },
+    "updater:default"
+  ]
+}
