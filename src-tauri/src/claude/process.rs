@@ -201,6 +201,14 @@ pub async fn run_claude_with_callback(
         "--verbose".to_string(),
     ];
 
+    // Token-level deltas: without this flag, stream-json only emits whole
+    // assistant messages, so the UI "streams" in big chunks instead of live
+    // text. The full message still arrives afterwards — the read loop
+    // suppresses its text/thinking blocks to avoid duplication.
+    if opts.streaming {
+        args.push("--include-partial-messages".to_string());
+    }
+
     // System prompt: write to temp file if long, pass as arg if short
     let _sys_prompt_file: Option<tempfile::NamedTempFile> = None;
     if let Some(ref sys_prompt) = opts.system_prompt {
@@ -265,6 +273,9 @@ pub async fn run_claude_with_callback(
     let mut final_result = String::new();
     let mut structured_output: Option<serde_json::Value> = None;
     let mut fatal_hit_count: u32 = 0;
+    // True once token deltas have been streamed — full assistant messages
+    // then skip their text/thinking blocks (already shown live).
+    let mut saw_stream_deltas = false;
 
     while let Some(line) = lines.next_line().await? {
         // Check cancellation
@@ -345,10 +356,12 @@ pub async fn run_claude_with_callback(
                                     .unwrap_or("");
                                 match block_type {
                                     "text" => {
-                                        if let Some(text) = block.get("text").and_then(|v| v.as_str()) {
-                                            let _ = on_event(FrontendStreamEvent::Text {
-                                                content: text.to_string(),
-                                            });
+                                        if !saw_stream_deltas {
+                                            if let Some(text) = block.get("text").and_then(|v| v.as_str()) {
+                                                let _ = on_event(FrontendStreamEvent::Text {
+                                                    content: text.to_string(),
+                                                });
+                                            }
                                         }
                                     }
                                     "tool_use" => {
@@ -362,10 +375,12 @@ pub async fn run_claude_with_callback(
                                         let _ = on_event(FrontendStreamEvent::ToolUse { tool, input });
                                     }
                                     "thinking" => {
-                                        if let Some(thinking) = block.get("thinking").and_then(|v| v.as_str()) {
-                                            let _ = on_event(FrontendStreamEvent::Thinking {
-                                                content: thinking.to_string(),
-                                            });
+                                        if !saw_stream_deltas {
+                                            if let Some(thinking) = block.get("thinking").and_then(|v| v.as_str()) {
+                                                let _ = on_event(FrontendStreamEvent::Thinking {
+                                                    content: thinking.to_string(),
+                                                });
+                                            }
                                         }
                                     }
                                     _ => {}
@@ -399,12 +414,14 @@ pub async fn run_claude_with_callback(
                         let delta_type = delta.get("type").and_then(|v| v.as_str()).unwrap_or("");
                         if delta_type == "text_delta" {
                             if let Some(text) = delta.get("text").and_then(|v| v.as_str()) {
+                                saw_stream_deltas = true;
                                 let _ = on_event(FrontendStreamEvent::Text {
                                     content: text.to_string(),
                                 });
                             }
                         } else if delta_type == "thinking_delta" {
                             if let Some(thinking) = delta.get("thinking").and_then(|v| v.as_str()) {
+                                saw_stream_deltas = true;
                                 let _ = on_event(FrontendStreamEvent::Thinking {
                                     content: thinking.to_string(),
                                 });

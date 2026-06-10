@@ -32,8 +32,10 @@ export function EditorContent() {
 
     case "stream":
     case "clarifying":
-      // Clarifying questions are now integrated inline in StreamView
-      return <StreamView />;
+      // Clarifying questions are now integrated inline in StreamView.
+      // The execution tab must read the execution store's stream, not the
+      // epic context's planning stream (which is empty during a build).
+      return <StreamView source={activeTab.id === "stream:execution" ? "execution" : "planning"} />;
 
     case "file":
       return activeTab.artifactId ? <FilePreview filePath={activeTab.artifactId} /> : <WelcomeView />;

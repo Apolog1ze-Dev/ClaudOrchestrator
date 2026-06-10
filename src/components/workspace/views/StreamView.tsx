@@ -77,7 +77,13 @@ function ThinkingBlock({ content, isActive }: { content: string; isActive: boole
 
 // ─── Stream View ─────────────────────────────────────────────────────────────
 
-export function StreamView() {
+interface StreamViewProps {
+  /** Which stream this tab shows. "execution" = the build's execution store
+   * stream; "planning" (default) = the epic context's planning stream. */
+  source?: "execution" | "planning";
+}
+
+export function StreamView({ source = "planning" }: StreamViewProps) {
   const epicCtx = useOptionalEpicContext();
   const executionStreamEvents = useExecutionStore((s) => s.streamEvents);
   const isExecutionRunning = useExecutionStore((s) => s.isRunning);
@@ -86,13 +92,17 @@ export function StreamView() {
   const planMultiplier = useConfigStore((s) => s.planInfo)?.usage_multiplier ?? 1;
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const events = epicCtx?.streamEvents ?? executionStreamEvents;
+  const isExecutionTab = source === "execution";
+  const events = isExecutionTab
+    ? executionStreamEvents
+    : epicCtx?.streamEvents ?? executionStreamEvents;
   const modelName = epicCtx?.activeModel ?? "";
-  const step = epicCtx?.step;
+  const step = isExecutionTab ? undefined : epicCtx?.step;
   const data = epicCtx?.data;
   const isProcessing = epicCtx?.isProcessing ?? false;
 
   const title =
+    isExecutionTab ? "Build Output" :
     step === "scouting" ? "Scanning Codebase" :
     step === "generating_specs" ? "Generating Specs" :
     step === "generating_tickets" ? "Decomposing Tickets" :
