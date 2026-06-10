@@ -31,11 +31,26 @@ pub struct UsageRecord {
     pub epic_id: Option<String>,
     pub model: String,
     pub effort: String,
-    /// Cost as reported by the CLI result event — an estimate, not a bill
+    /// Cost as reported by the call itself (CLI result event or provider
+    /// usage block). Local providers record a real 0.0.
     pub cost_usd: f64,
     pub duration_ms: u64,
     #[serde(default)]
     pub session_id: Option<String>,
+    /// Real prompt tokens reported by the call
+    #[serde(default)]
+    pub tokens_in: u64,
+    /// Real completion tokens reported by the call
+    #[serde(default)]
+    pub tokens_out: u64,
+    /// Where cost_usd came from: "cli" | "provider" | "free_local" |
+    /// "tokens_only" (no price reported — tokens are still real)
+    #[serde(default = "default_cost_source")]
+    pub cost_source: String,
+}
+
+fn default_cost_source() -> String {
+    "cli".to_string()
 }
 
 pub fn usage_ledger_path(working_dir: &str) -> PathBuf {
@@ -79,6 +94,9 @@ pub struct UsageSummary {
     /// This month's spend per task, highest first
     pub by_task_month: Vec<TaskSpend>,
     pub record_count: u64,
+    /// Real token totals for the month (all backends)
+    pub month_tokens_in: u64,
+    pub month_tokens_out: u64,
 }
 
 /// Read and aggregate the workspace ledger. Unparseable lines (e.g. a torn
@@ -95,6 +113,8 @@ pub fn read_usage_summary(working_dir: &str) -> UsageSummary {
         total_usd: 0.0,
         by_task_month: Vec::new(),
         record_count: 0,
+        month_tokens_in: 0,
+        month_tokens_out: 0,
     };
 
     let content = match std::fs::read_to_string(usage_ledger_path(working_dir)) {
@@ -116,6 +136,8 @@ pub fn read_usage_summary(working_dir: &str) -> UsageSummary {
         summary.total_usd += record.cost_usd;
         if record.ts.starts_with(&month_prefix) {
             summary.month_usd += record.cost_usd;
+            summary.month_tokens_in += record.tokens_in;
+            summary.month_tokens_out += record.tokens_out;
             *by_task.entry(record.task.clone()).or_insert(0.0) += record.cost_usd;
             if record.ts.starts_with(&day_prefix) {
                 summary.today_usd += record.cost_usd;

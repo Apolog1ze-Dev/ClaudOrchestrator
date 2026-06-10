@@ -59,6 +59,7 @@ pub async fn remediate(
             streaming: true,
             session_resume,
             usage: Some(UsageContext::new("remediator", Some(phase.epic_id.clone()))),
+            provider: None, // needs edit tools + session resume — CLI only
         },
         on_event,
     )

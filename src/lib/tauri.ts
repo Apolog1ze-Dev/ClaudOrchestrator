@@ -66,6 +66,24 @@ export async function getUsageSummary(targetDir: string): Promise<UsageSummary> 
   return invoke("get_usage_summary", { targetDir });
 }
 
+// ─── Provider (BYO) Commands ─────────────────────────────────────────────────
+
+export async function getProviderProfiles(): Promise<import("../types/config").ProviderInfo[]> {
+  return invoke("get_provider_profiles");
+}
+
+export async function setProviderKey(providerId: string, key: string): Promise<void> {
+  return invoke("set_provider_key", { providerId, key });
+}
+
+export async function testProvider(
+  providerId: string,
+  model: string,
+  targetDir?: string
+): Promise<import("../types/config").ProviderTestResult> {
+  return invoke("test_provider", { providerId, model, targetDir: targetDir ?? null });
+}
+
 export async function getDefaultConfig(): Promise<AppConfig> {
   return invoke("get_default_config");
 }

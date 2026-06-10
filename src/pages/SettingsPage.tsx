@@ -44,12 +44,16 @@ const EFFORT_DETAILS: Record<EffortLevel, string> = {
 
 // ─── ModelCard Component ─────────────────────────────────────────────────────
 
+// Roles that drive agent tools (file edits, shell) must run on the Claude CLI
+const TOOL_BOUND_ROLES: ModelRole[] = ["scout", "executor"];
+
 function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
   const config = useConfigStore((s) => s.config);
   const availableModels = useConfigStore((s) => s.availableModels);
   const planInfo = useConfigStore((s) => s.planInfo);
   const updateRoleModel = useConfigStore((s) => s.updateRoleModel);
   const updateRoleEffort = useConfigStore((s) => s.updateRoleEffort);
+  const updateRoleProvider = useConfigStore((s) => s.updateRoleProvider);
   const isModelAvailable = useConfigStore((s) => s.isModelAvailable);
   const isMaxEffortPractical = useConfigStore((s) => s.isMaxEffortPractical);
   const [open, setOpen] = useState(false);
@@ -74,6 +78,9 @@ function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
   const supportedEfforts = currentModel?.supported_efforts ?? ["low", "medium", "high"];
   const isOpusFamily = currentModel?.family === "opus";
   const opusWarning = isOpusFamily ? planInfo?.opus_warning : null;
+  const toolBound = TOOL_BOUND_ROLES.includes(role.key);
+  const providerProfiles = config.providers ?? [];
+  const activeProvider = providerProfiles.find((p) => p.id === assignment.provider);
 
   return (
     <div className="bg-surface-1 border border-neutral-800 rounded-xl" style={{ overflow: "visible" }}>
@@ -83,9 +90,47 @@ function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
         <p className="text-xs text-neutral-500">{role.description}</p>
       </div>
 
+      {/* Provider (BYO) */}
+      <div className="px-5 pb-3">
+        <label className="text-xs text-neutral-500 mb-2 block">Provider</label>
+        {toolBound ? (
+          <p className="px-3 py-2 rounded-lg border border-neutral-800 bg-surface-0 text-xs text-neutral-500">
+            Claude subscription (CLI) — this role needs agent tools
+          </p>
+        ) : (
+          <select
+            value={assignment.provider ?? ""}
+            onChange={(e) => updateRoleProvider(role.key, e.target.value || null)}
+            className="w-full px-3 py-2.5 rounded-lg border border-neutral-700 bg-surface-2 text-sm text-neutral-200 focus:outline-none focus:border-neutral-500"
+          >
+            <option value="">Claude (subscription)</option>
+            {providerProfiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
       {/* Model Selector */}
       <div className="px-5 pb-3" ref={wrapperRef} style={{ position: "relative", zIndex: open ? 50 : 1 }}>
         <label className="text-xs text-neutral-500 mb-2 block">Model</label>
+        {assignment.provider ? (
+          <>
+            <input
+              type="text"
+              value={assignment.model_id}
+              onChange={(e) => updateRoleModel(role.key, e.target.value)}
+              placeholder={activeProvider?.local ? "e.g. llama3.3, qwen2.5-coder" : "e.g. gpt-4.1-mini"}
+              className="w-full px-3 py-2.5 rounded-lg border border-neutral-700 bg-surface-2 text-sm text-neutral-200 font-mono focus:outline-none focus:border-neutral-500"
+            />
+            <p className="text-[11px] text-neutral-600 mt-1.5">
+              Model name as known by {activeProvider?.label ?? assignment.provider}
+            </p>
+          </>
+        ) : (
+        <>
         <button
           onClick={() => setOpen(!open)}
           className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-neutral-700 bg-surface-2 hover:border-neutral-600 transition-colors text-sm"
@@ -183,9 +228,18 @@ function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
             <span>{opusWarning}</span>
           </div>
         )}
+        </>
+        )}
       </div>
 
-      {/* Effort Selector */}
+      {/* Effort Selector (Claude CLI only) */}
+      {assignment.provider ? (
+        <div className="px-5 pb-5">
+          <p className="text-[11px] text-neutral-600">
+            Effort levels apply to Claude models only.
+          </p>
+        </div>
+      ) : (
       <div className="px-5 pb-5">
         <label className="flex items-center text-xs text-neutral-500 mb-2">
           Effort Level
@@ -265,7 +319,165 @@ function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
           )}
         </AnimatePresence>
       </div>
+      )}
 
+    </div>
+  );
+}
+
+// ─── Providers Section ───────────────────────────────────────────────────────
+
+function ProvidersSection({
+  config,
+  updateConfig,
+  targetDir,
+}: {
+  config: import("../types/config").AppConfig;
+  updateConfig: (c: import("../types/config").AppConfig) => void;
+  targetDir: string | null;
+}) {
+  const profiles = config.providers ?? [];
+  const [keyDrafts, setKeyDrafts] = useState<Record<string, string>>({});
+  const [keyStatus, setKeyStatus] = useState<Record<string, boolean>>({});
+  const [testModels, setTestModels] = useState<Record<string, string>>({});
+  const [testResults, setTestResults] = useState<Record<string, string>>({});
+  const [testing, setTesting] = useState<string | null>(null);
+
+  useEffect(() => {
+    import("../lib/tauri").then(({ getProviderProfiles }) =>
+      getProviderProfiles()
+        .then((infos) => {
+          const status: Record<string, boolean> = {};
+          for (const info of infos) status[info.id] = info.has_key;
+          setKeyStatus(status);
+        })
+        .catch(() => {})
+    );
+  }, []);
+
+  const saveKey = async (providerId: string) => {
+    const { setProviderKey } = await import("../lib/tauri");
+    const key = keyDrafts[providerId] ?? "";
+    try {
+      await setProviderKey(providerId, key);
+      setKeyStatus((s) => ({ ...s, [providerId]: key.trim().length > 0 }));
+      setKeyDrafts((d) => ({ ...d, [providerId]: "" }));
+    } catch (e) {
+      setTestResults((r) => ({ ...r, [providerId]: `Key save failed: ${e}` }));
+    }
+  };
+
+  const runTest = async (providerId: string) => {
+    const model = testModels[providerId]?.trim();
+    if (!model) {
+      setTestResults((r) => ({ ...r, [providerId]: "Enter a model name to test" }));
+      return;
+    }
+    setTesting(providerId);
+    setTestResults((r) => ({ ...r, [providerId]: "" }));
+    try {
+      const { testProvider } = await import("../lib/tauri");
+      const result = await testProvider(providerId, model, targetDir ?? undefined);
+      setTestResults((r) => ({
+        ...r,
+        [providerId]: result.ok
+          ? `OK in ${result.latency_ms}ms${result.cost_usd > 0 ? ` · $${result.cost_usd.toFixed(5)} (provider-reported)` : ""} · ${result.message}`
+          : result.message,
+      }));
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  const updateBaseUrl = (providerId: string, baseUrl: string) => {
+    updateConfig({
+      ...config,
+      providers: profiles.map((p) => (p.id === providerId ? { ...p, base_url: baseUrl } : p)),
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      {profiles.map((p) => (
+        <div key={p.id} className="bg-surface-1 border border-neutral-800 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-neutral-200">{p.label}</span>
+              {p.local && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  local · $0
+                </span>
+              )}
+              {p.requires_key && (
+                <span
+                  className={cn(
+                    "px-1.5 py-0.5 rounded text-[10px] border",
+                    keyStatus[p.id]
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                      : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                  )}
+                >
+                  {keyStatus[p.id] ? "key set" : "no key"}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] text-neutral-600 block mb-1">Base URL</label>
+              <input
+                type="text"
+                value={p.base_url}
+                onChange={(e) => updateBaseUrl(p.id, e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-neutral-800 bg-surface-0 text-xs text-neutral-300 font-mono focus:outline-none focus:border-neutral-600"
+              />
+            </div>
+            {p.requires_key && (
+              <div>
+                <label className="text-[11px] text-neutral-600 block mb-1">API key</label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="password"
+                    value={keyDrafts[p.id] ?? ""}
+                    onChange={(e) => setKeyDrafts((d) => ({ ...d, [p.id]: e.target.value }))}
+                    placeholder={keyStatus[p.id] ? "•••••• (set — paste to replace, empty to clear)" : "paste key"}
+                    className="flex-1 px-2.5 py-1.5 rounded-lg border border-neutral-800 bg-surface-0 text-xs text-neutral-300 focus:outline-none focus:border-neutral-600"
+                  />
+                  <button
+                    onClick={() => saveKey(p.id)}
+                    className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-neutral-700 text-neutral-300 hover:border-neutral-500 transition-colors"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className={p.requires_key ? "md:col-span-2" : ""}>
+              <label className="text-[11px] text-neutral-600 block mb-1">Test (model name)</label>
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={testModels[p.id] ?? ""}
+                  onChange={(e) => setTestModels((m) => ({ ...m, [p.id]: e.target.value }))}
+                  placeholder={p.local ? "llama3.3" : p.id === "openrouter" ? "openai/gpt-4.1-mini" : "gpt-4.1-mini"}
+                  className="flex-1 px-2.5 py-1.5 rounded-lg border border-neutral-800 bg-surface-0 text-xs text-neutral-300 font-mono focus:outline-none focus:border-neutral-600"
+                />
+                <button
+                  onClick={() => runTest(p.id)}
+                  disabled={testing !== null}
+                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors disabled:opacity-50"
+                >
+                  {testing === p.id ? "Testing…" : "Test"}
+                </button>
+              </div>
+              {testResults[p.id] && (
+                <p className="text-[11px] text-neutral-400 mt-1.5 break-all">{testResults[p.id]}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -283,6 +495,20 @@ export function SettingsPage() {
 
   const config = settingsScope === "general" ? generalConfig : workspaceConfig;
   const workspaceName = targetDir?.split(/[/\\]/).filter(Boolean).pop() ?? "";
+
+  // Persist edits made through store actions (the ModelCards call
+  // updateRoleModel/Effort/Provider, which update the store but never wrote
+  // to disk — the second half of the "settings silently revert" bug).
+  const lastPersistedRef = useRef(workspaceConfig);
+  useEffect(() => {
+    if (lastPersistedRef.current === workspaceConfig) return;
+    lastPersistedRef.current = workspaceConfig;
+    if (targetDir) {
+      saveConfig(workspaceConfig, targetDir).catch((e) =>
+        console.error("Failed to persist model settings:", e)
+      );
+    }
+  }, [workspaceConfig, targetDir]);
 
   // Auto-save: update store AND persist to disk immediately on every change
   const updateConfig = (newConfig: typeof config) => {
@@ -368,6 +594,18 @@ export function SettingsPage() {
             <ModelCard key={role.key} role={role} />
           ))}
         </div>
+      </section>
+
+      {/* BYO Providers */}
+      <section className="mb-8">
+        <h3 className="text-lg font-semibold text-neutral-200 mb-2">Model Providers (BYO)</h3>
+        <p className="text-sm text-neutral-400 mb-6">
+          Bring your own API keys or local engines for planning-stage roles. API keys are
+          stored in the OS keychain, never in config files. Costs are recorded from real
+          call data — provider-reported charges and actual token counts; local engines
+          are a true $0.
+        </p>
+        <ProvidersSection config={config} updateConfig={updateConfig} targetDir={targetDir} />
       </section>
 
       {/* Verification Config */}

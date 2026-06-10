@@ -122,11 +122,14 @@ pub async fn verify_phase(
             effort: config.models.verifier.effort.clone(),
                 working_dir: target_dir.to_string(),
                 system_prompt: None,
-                allowed_tools: None,
+                // Diff review is pure prompt→JSON (the diff travels in the
+                // prompt), so it is eligible for BYO provider routing.
+                allowed_tools: Some(vec!["none".to_string()]),
                 json_schema: Some(verification_schema()),
                 streaming: false,
                 session_resume: None,
                 usage: Some(UsageContext::new("verifier_diff", Some(phase.epic_id.clone()))),
+                provider: config.models.verifier.provider.clone(),
             })
             .await?;
 

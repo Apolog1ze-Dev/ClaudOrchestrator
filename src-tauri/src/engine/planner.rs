@@ -126,6 +126,7 @@ pub async fn capture_intent(
             streaming: true,
             session_resume: None,
             usage: Some(UsageContext::new("clarify", Some(epic.id.clone()))),
+            provider: config.models.orchestrator.provider.clone(),
         },
         on_event,
     )
@@ -177,6 +178,9 @@ pub async fn continue_clarify(
                 streaming: true,
                 session_resume: Some(session_id.clone()),
                 usage: Some(UsageContext::new("clarify", Some(epic.id.clone()))),
+                // Session resume is CLI-only; provider routing would lose the
+                // conversation memory, so clarify continuation stays on the CLI.
+                provider: None,
             },
             on_event,
         )
@@ -221,6 +225,8 @@ pub async fn continue_clarify(
             streaming: true,
             session_resume: None,
             usage: Some(UsageContext::new("clarify", Some(epic.id.clone()))),
+            // Stateless fallback turn carries full history — provider-eligible.
+            provider: config.models.orchestrator.provider.clone(),
         },
         fallback_event,
     )
@@ -258,6 +264,7 @@ pub async fn generate_prd(
             streaming: true,
             session_resume: None,
             usage: Some(UsageContext::new("spec_prd", Some(epic.id.clone()))),
+            provider: config.models.orchestrator.provider.clone(),
         },
         on_event,
     )
@@ -319,6 +326,7 @@ pub async fn generate_tech_spec(
             streaming: true,
             session_resume: None,
             usage: Some(UsageContext::new("spec_tech", Some(epic.id.clone()))),
+            provider: config.models.orchestrator.provider.clone(),
         },
         on_event,
     )
@@ -380,6 +388,7 @@ pub async fn generate_design_spec(
             streaming: true,
             session_resume: None,
             usage: Some(UsageContext::new("spec_design", Some(epic.id.clone()))),
+            provider: config.models.orchestrator.provider.clone(),
         },
         on_event,
     )
@@ -445,6 +454,7 @@ pub async fn decompose_into_tickets(
             streaming: true,
             session_resume: None,
             usage: Some(UsageContext::new("decompose", Some(epic.id.clone()))),
+            provider: config.models.orchestrator.provider.clone(),
         },
         on_event,
     )
@@ -547,6 +557,7 @@ pub async fn plan_ticket_phases(
             streaming: true,
             session_resume: None,
             usage: Some(UsageContext::new("phase_plan", Some(epic_id.to_string()))),
+            provider: config.models.orchestrator.provider.clone(),
         },
         on_event,
     )
@@ -668,6 +679,7 @@ pub async fn plan_quick(
             streaming: true,
             session_resume: None,
             usage: Some(UsageContext::new("phase_plan_quick", Some(epic_id.to_string()))),
+            provider: config.models.orchestrator.provider.clone(),
         },
         on_event,
     )

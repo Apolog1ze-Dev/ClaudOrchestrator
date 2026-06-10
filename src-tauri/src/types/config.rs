@@ -172,13 +172,19 @@ impl EffortLevel {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelAssignment {
-    /// The model CLI id (e.g. "opus", "sonnet", "claude-opus-4-6")
+    /// The model CLI id (e.g. "opus", "sonnet", "claude-opus-4-6") — or, for
+    /// BYO providers, the provider's model name (e.g. "gpt-4.1-mini", "llama3.3")
     pub model_id: String,
     /// Effort level for this role
     pub effort: EffortLevel,
     /// Max agentic turns
     #[serde(default)]
     pub max_turns: Option<u32>,
+    /// BYO provider id ("openai", "openrouter", "ollama", "lmstudio",
+    /// "custom"). None = Claude subscription via the CLI. Roles that need
+    /// agent tools (scout/executor) always use the CLI regardless.
+    #[serde(default)]
+    pub provider: Option<String>,
     /// Legacy field — ignored but accepted for backward compat with old configs
     #[serde(default, skip_serializing)]
     pub max_budget_usd: Option<f64>,
@@ -199,24 +205,28 @@ impl Default for ModelConfig {
                 model_id: "sonnet".to_string(),
                 effort: EffortLevel::High,
                 max_turns: Some(30),
+                provider: None,
                 max_budget_usd: None,
             },
             scout: ModelAssignment {
                 model_id: "haiku".to_string(),
                 effort: EffortLevel::Medium,
                 max_turns: Some(20),
+                provider: None,
                 max_budget_usd: None,
             },
             executor: ModelAssignment {
                 model_id: "sonnet".to_string(),
                 effort: EffortLevel::High,
                 max_turns: Some(50),
+                provider: None,
                 max_budget_usd: None,
             },
             verifier: ModelAssignment {
                 model_id: "opus".to_string(),
                 effort: EffortLevel::Max,
                 max_turns: Some(20),
+                provider: None,
                 max_budget_usd: None,
             },
         }
@@ -472,6 +482,9 @@ pub struct AppConfig {
     pub planning_detail: PlanningDetail,
     #[serde(default)]
     pub budget: BudgetConfig,
+    /// BYO provider profiles (base URLs editable; keys live in the OS keychain)
+    #[serde(default = "crate::providers::default_provider_profiles")]
+    pub providers: Vec<crate::providers::ProviderProfile>,
 }
 
 impl Default for AppConfig {
@@ -484,6 +497,7 @@ impl Default for AppConfig {
             target_dir: None,
             planning_detail: PlanningDetail::default(),
             budget: BudgetConfig::default(),
+            providers: crate::providers::default_provider_profiles(),
         }
     }
 }

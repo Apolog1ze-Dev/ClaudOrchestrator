@@ -43,6 +43,31 @@ export interface ModelAssignment {
   model_id: string;
   effort: EffortLevel;
   max_turns?: number;
+  /** BYO provider id ("openai" | "openrouter" | "ollama" | "lmstudio" | "custom").
+   * null/undefined = Claude subscription via the CLI. */
+  provider?: string | null;
+}
+
+/** A BYO provider endpoint (keys live in the OS keychain, never here) */
+export interface ProviderProfile {
+  id: string;
+  label: string;
+  base_url: string;
+  requires_key: boolean;
+  local?: boolean;
+}
+
+export interface ProviderInfo extends ProviderProfile {
+  has_key: boolean;
+}
+
+export interface ProviderTestResult {
+  ok: boolean;
+  message: string;
+  latency_ms: number;
+  tokens_in: number;
+  tokens_out: number;
+  cost_usd: number;
 }
 
 export interface ModelConfig {
@@ -101,6 +126,8 @@ export interface AppConfig {
   /** How detailed the phase planning should be */
   planning_detail?: PlanningDetail;
   budget?: BudgetConfig;
+  /** BYO provider profiles (base URLs editable; keys in OS keychain) */
+  providers?: ProviderProfile[];
 }
 
 // ─── Usage Ledger ────────────────────────────────────────────────────────────
@@ -119,6 +146,9 @@ export interface UsageSummary {
   total_usd: number;
   by_task_month: TaskSpend[];
   record_count: number;
+  /** Real token totals for the month (all backends) */
+  month_tokens_in?: number;
+  month_tokens_out?: number;
 }
 
 /**

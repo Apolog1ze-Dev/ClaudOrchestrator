@@ -2,6 +2,7 @@ mod commands;
 mod claude;
 mod engine;
 mod handoff;
+mod providers;
 mod storage;
 mod types;
 mod updater;
@@ -99,6 +100,10 @@ pub fn run() {
             commands::chat_commands::chat_refine_apply,
             // Usage / budget commands
             commands::usage_commands::get_usage_summary,
+            // Provider (BYO) commands
+            commands::provider_commands::get_provider_profiles,
+            commands::provider_commands::set_provider_key,
+            commands::provider_commands::test_provider,
             // Hand-off commands
             commands::handoff_commands::generate_handoff_bundle,
             commands::handoff_commands::detect_handoff_targets,

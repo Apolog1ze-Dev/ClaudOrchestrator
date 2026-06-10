@@ -8,3 +8,4 @@ pub mod chat_commands;
 pub mod filesystem_commands;
 pub mod usage_commands;
 pub mod handoff_commands;
+pub mod provider_commands;

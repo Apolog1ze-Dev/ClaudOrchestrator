@@ -32,6 +32,7 @@ pub async fn analyze_codebase(
             streaming: true,
             session_resume: None,
             usage: Some(UsageContext::new("scout", None)),
+            provider: None, // needs Read/Glob/Grep tools — CLI only
         },
         on_event,
     )

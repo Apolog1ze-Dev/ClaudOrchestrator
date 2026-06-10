@@ -35,6 +35,8 @@ impl AppState {
             AppConfig::default()
         };
 
+        crate::providers::set_runtime_profiles(&general_config.providers);
+
         Ok(Self {
             config: Mutex::new(AppConfig::default()),
             general_config: Mutex::new(general_config),
@@ -52,6 +54,8 @@ impl AppState {
     }
 
     pub fn set_config(&self, config: AppConfig) {
+        // Keep the provider dispatch path's profile registry in sync
+        crate::providers::set_runtime_profiles(&config.providers);
         *self.config.lock().unwrap() = config;
     }
 

@@ -85,6 +85,7 @@ pub async fn chat_ask(
             streaming: true,
             session_resume: None,
             usage: Some(crate::storage::usage::UsageContext::new("chat_ask", Some(epic_id.clone()))),
+            provider: config.models.orchestrator.provider.clone(),
         },
         channel_callback(channel),
     )
@@ -131,6 +132,7 @@ pub async fn chat_refine_check(
             streaming: true,
             session_resume: None,
             usage: Some(crate::storage::usage::UsageContext::new("chat_refine_check", Some(epic_id.clone()))),
+            provider: config.models.orchestrator.provider.clone(),
         },
         channel_callback(channel),
     )
@@ -210,6 +212,7 @@ pub async fn chat_refine_apply(
             streaming: true,
             session_resume: None,
             usage: Some(crate::storage::usage::UsageContext::new("chat_refine_apply", Some(epic_id.clone()))),
+            provider: config.models.orchestrator.provider.clone(),
         },
         channel_callback(channel),
     )
@@ -296,6 +299,7 @@ pub async fn chat_refine_apply(
             streaming: true,
             session_resume: None,
             usage: Some(crate::storage::usage::UsageContext::new("refine_coherency_review", Some(epic_id.clone()))),
+            provider: config.models.verifier.provider.clone(),
         },
         channel_callback(review_channel),
     )

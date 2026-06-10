@@ -147,6 +147,10 @@ pub struct ClaudeProcessOptions {
     /// When set, the call's cost is appended to the workspace usage ledger
     /// (`.claudorchestrator/usage.jsonl`) attributed to this task/epic.
     pub usage: Option<crate::storage::usage::UsageContext>,
+    /// BYO provider id (e.g. "openai", "openrouter", "ollama"). None = the
+    /// Claude CLI. Only tool-free calls are routed; calls that need agent
+    /// tools always run on the CLI regardless of this field.
+    pub provider: Option<String>,
 }
 
 #[derive(Debug)]
@@ -184,6 +188,25 @@ pub async fn run_claude_with_callback(
     opts: ClaudeProcessOptions,
     mut on_event: StreamCallback,
 ) -> Result<ClaudeResult> {
+    // BYO provider routing: tool-free calls can run on an OpenAI-compatible
+    // provider (OpenAI/OpenRouter/Ollama/LM Studio/custom). Anything that
+    // needs agent tools always uses the Claude CLI.
+    if let Some(ref provider_id) = opts.provider {
+        let needs_tools = opts
+            .allowed_tools
+            .as_ref()
+            .map(|tools| tools.iter().any(|t| t != "none"))
+            .unwrap_or(true);
+        if !needs_tools {
+            let provider_id = provider_id.clone();
+            return crate::providers::run_chat(&provider_id, &opts, on_event).await;
+        }
+        eprintln!(
+            "[providers] call requires agent tools — using Claude CLI instead of provider '{}'",
+            provider_id
+        );
+    }
+
     clear_cancel();
     let started = std::time::Instant::now();
 
@@ -276,6 +299,9 @@ pub async fn run_claude_with_callback(
     // True once token deltas have been streamed — full assistant messages
     // then skip their text/thinking blocks (already shown live).
     let mut saw_stream_deltas = false;
+    // Real token usage from the CLI's result event
+    let mut cli_tokens_in: u64 = 0;
+    let mut cli_tokens_out: u64 = 0;
 
     while let Some(line) = lines.next_line().await? {
         // Check cancellation
@@ -398,6 +424,10 @@ pub async fn run_claude_with_callback(
                 total_cost = parsed.get("total_cost_usd")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
+                if let Some(usage) = parsed.get("usage") {
+                    cli_tokens_in = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                    cli_tokens_out = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                }
                 if let Some(sid) = parsed.get("session_id").and_then(|v| v.as_str()) {
                     session_id = Some(sid.to_string());
                 }
@@ -462,6 +492,9 @@ pub async fn run_claude_with_callback(
                 cost_usd: total_cost,
                 duration_ms: started.elapsed().as_millis() as u64,
                 session_id: session_id.clone(),
+                tokens_in: cli_tokens_in,
+                tokens_out: cli_tokens_out,
+                cost_source: "cli".to_string(),
             },
         );
     }

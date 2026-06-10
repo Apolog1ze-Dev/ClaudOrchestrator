@@ -80,6 +80,7 @@ pub async fn start_scouting(
                     streaming: false,
                     session_resume: None,
                     usage: Some(crate::storage::usage::UsageContext::new("title", Some(epic_id.clone()))),
+                    provider: None, // hardcoded haiku micro-call — keep on CLI
                 },
             ).await;
 
@@ -665,6 +666,7 @@ pub async fn review_plan_coherency(
             streaming: true,
             session_resume: None,
             usage: Some(crate::storage::usage::UsageContext::new("plan_review", Some(epic_id.clone()))),
+            provider: config.models.verifier.provider.clone(),
         },
         channel_callback(channel),
     )
@@ -726,6 +728,7 @@ pub async fn generate_plan_questionnaire(
             streaming: true,
             session_resume: None,
             usage: Some(crate::storage::usage::UsageContext::new("plan_questionnaire", Some(epic_id.clone()))),
+            provider: config.models.orchestrator.provider.clone(),
         },
         channel_callback(channel),
     )
