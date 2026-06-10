@@ -181,10 +181,14 @@ pub struct ModelAssignment {
     #[serde(default)]
     pub max_turns: Option<u32>,
     /// BYO provider id ("openai", "openrouter", "ollama", "lmstudio",
-    /// "custom"). None = Claude subscription via the CLI. Roles that need
-    /// agent tools (scout/executor) always use the CLI regardless.
+    /// "custom"). None = Claude subscription via the CLI. Agent roles keep
+    /// the CLI harness; providers with an Anthropic-compatible endpoint
+    /// (Ollama) power its inference via ANTHROPIC_BASE_URL.
     #[serde(default)]
     pub provider: Option<String>,
+    /// Reasoning/thinking toggle for provider-routed calls. None = model default.
+    #[serde(default)]
+    pub thinking: Option<bool>,
     /// Legacy field — ignored but accepted for backward compat with old configs
     #[serde(default, skip_serializing)]
     pub max_budget_usd: Option<f64>,
@@ -206,6 +210,7 @@ impl Default for ModelConfig {
                 effort: EffortLevel::High,
                 max_turns: Some(30),
                 provider: None,
+                thinking: None,
                 max_budget_usd: None,
             },
             scout: ModelAssignment {
@@ -213,6 +218,7 @@ impl Default for ModelConfig {
                 effort: EffortLevel::Medium,
                 max_turns: Some(20),
                 provider: None,
+                thinking: None,
                 max_budget_usd: None,
             },
             executor: ModelAssignment {
@@ -220,6 +226,7 @@ impl Default for ModelConfig {
                 effort: EffortLevel::High,
                 max_turns: Some(50),
                 provider: None,
+                thinking: None,
                 max_budget_usd: None,
             },
             verifier: ModelAssignment {
@@ -227,6 +234,7 @@ impl Default for ModelConfig {
                 effort: EffortLevel::Max,
                 max_turns: Some(20),
                 provider: None,
+                thinking: None,
                 max_budget_usd: None,
             },
         }

@@ -127,6 +127,7 @@ pub async fn capture_intent(
             session_resume: None,
             usage: Some(UsageContext::new("clarify", Some(epic.id.clone()))),
             provider: config.models.orchestrator.provider.clone(),
+            thinking: config.models.orchestrator.thinking,
         },
         on_event,
     )
@@ -181,6 +182,7 @@ pub async fn continue_clarify(
                 // Session resume is CLI-only; provider routing would lose the
                 // conversation memory, so clarify continuation stays on the CLI.
                 provider: None,
+                thinking: None,
             },
             on_event,
         )
@@ -227,6 +229,7 @@ pub async fn continue_clarify(
             usage: Some(UsageContext::new("clarify", Some(epic.id.clone()))),
             // Stateless fallback turn carries full history — provider-eligible.
             provider: config.models.orchestrator.provider.clone(),
+            thinking: config.models.orchestrator.thinking,
         },
         fallback_event,
     )
@@ -265,6 +268,7 @@ pub async fn generate_prd(
             session_resume: None,
             usage: Some(UsageContext::new("spec_prd", Some(epic.id.clone()))),
             provider: config.models.orchestrator.provider.clone(),
+            thinking: config.models.orchestrator.thinking,
         },
         on_event,
     )
@@ -327,6 +331,7 @@ pub async fn generate_tech_spec(
             session_resume: None,
             usage: Some(UsageContext::new("spec_tech", Some(epic.id.clone()))),
             provider: config.models.orchestrator.provider.clone(),
+            thinking: config.models.orchestrator.thinking,
         },
         on_event,
     )
@@ -389,6 +394,7 @@ pub async fn generate_design_spec(
             session_resume: None,
             usage: Some(UsageContext::new("spec_design", Some(epic.id.clone()))),
             provider: config.models.orchestrator.provider.clone(),
+            thinking: config.models.orchestrator.thinking,
         },
         on_event,
     )
@@ -455,6 +461,7 @@ pub async fn decompose_into_tickets(
             session_resume: None,
             usage: Some(UsageContext::new("decompose", Some(epic.id.clone()))),
             provider: config.models.orchestrator.provider.clone(),
+            thinking: config.models.orchestrator.thinking,
         },
         on_event,
     )
@@ -558,6 +565,7 @@ pub async fn plan_ticket_phases(
             session_resume: None,
             usage: Some(UsageContext::new("phase_plan", Some(epic_id.to_string()))),
             provider: config.models.orchestrator.provider.clone(),
+            thinking: config.models.orchestrator.thinking,
         },
         on_event,
     )
@@ -680,6 +688,7 @@ pub async fn plan_quick(
             session_resume: None,
             usage: Some(UsageContext::new("phase_plan_quick", Some(epic_id.to_string()))),
             provider: config.models.orchestrator.provider.clone(),
+            thinking: config.models.orchestrator.thinking,
         },
         on_event,
     )

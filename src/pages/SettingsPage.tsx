@@ -54,6 +54,9 @@ function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
   const updateRoleModel = useConfigStore((s) => s.updateRoleModel);
   const updateRoleEffort = useConfigStore((s) => s.updateRoleEffort);
   const updateRoleProvider = useConfigStore((s) => s.updateRoleProvider);
+  const updateRoleThinking = useConfigStore((s) => s.updateRoleThinking);
+  const [discovered, setDiscovered] = useState<string[]>([]);
+  const [discovering, setDiscovering] = useState(false);
   const isModelAvailable = useConfigStore((s) => s.isModelAvailable);
   const isMaxEffortPractical = useConfigStore((s) => s.isMaxEffortPractical);
   const [open, setOpen] = useState(false);
@@ -81,6 +84,31 @@ function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
   const toolBound = TOOL_BOUND_ROLES.includes(role.key);
   const providerProfiles = config.providers ?? [];
   const activeProvider = providerProfiles.find((p) => p.id === assignment.provider);
+  // Agent roles keep the CLI tool harness, so only providers with an
+  // Anthropic-compatible endpoint can power their inference.
+  const selectableProfiles = toolBound
+    ? providerProfiles.filter((p) => p.anthropic_base_url)
+    : providerProfiles;
+
+  const refreshModels = async (providerId: string) => {
+    setDiscovering(true);
+    try {
+      const { listProviderModels } = await import("../lib/tauri");
+      setDiscovered(await listProviderModels(providerId));
+    } catch {
+      setDiscovered([]);
+    } finally {
+      setDiscovering(false);
+    }
+  };
+  useEffect(() => {
+    if (assignment.provider) {
+      refreshModels(assignment.provider);
+    } else {
+      setDiscovered([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignment.provider]);
 
   return (
     <div className="bg-surface-1 border border-neutral-800 rounded-xl" style={{ overflow: "visible" }}>
@@ -93,23 +121,23 @@ function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
       {/* Provider (BYO) */}
       <div className="px-5 pb-3">
         <label className="text-xs text-neutral-500 mb-2 block">Provider</label>
-        {toolBound ? (
-          <p className="px-3 py-2 rounded-lg border border-neutral-800 bg-surface-0 text-xs text-neutral-500">
-            Claude subscription (CLI) — this role needs agent tools
+        <select
+          value={assignment.provider ?? ""}
+          onChange={(e) => updateRoleProvider(role.key, e.target.value || null)}
+          className="w-full px-3 py-2.5 rounded-lg border border-neutral-700 bg-surface-2 text-sm text-neutral-200 focus:outline-none focus:border-neutral-500"
+        >
+          <option value="">Claude (subscription)</option>
+          {selectableProfiles.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        {toolBound && (
+          <p className="text-[11px] text-neutral-600 mt-1.5">
+            Agent roles keep the Claude CLI tool harness — only providers with an
+            Anthropic-compatible endpoint (e.g. Ollama) can power their inference.
           </p>
-        ) : (
-          <select
-            value={assignment.provider ?? ""}
-            onChange={(e) => updateRoleProvider(role.key, e.target.value || null)}
-            className="w-full px-3 py-2.5 rounded-lg border border-neutral-700 bg-surface-2 text-sm text-neutral-200 focus:outline-none focus:border-neutral-500"
-          >
-            <option value="">Claude (subscription)</option>
-            {providerProfiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
         )}
       </div>
 
@@ -118,15 +146,33 @@ function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
         <label className="text-xs text-neutral-500 mb-2 block">Model</label>
         {assignment.provider ? (
           <>
-            <input
-              type="text"
-              value={assignment.model_id}
-              onChange={(e) => updateRoleModel(role.key, e.target.value)}
-              placeholder={activeProvider?.local ? "e.g. llama3.3, qwen2.5-coder" : "e.g. gpt-4.1-mini"}
-              className="w-full px-3 py-2.5 rounded-lg border border-neutral-700 bg-surface-2 text-sm text-neutral-200 font-mono focus:outline-none focus:border-neutral-500"
-            />
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                list={`models-${role.key}`}
+                value={assignment.model_id}
+                onChange={(e) => updateRoleModel(role.key, e.target.value)}
+                placeholder={activeProvider?.local ? "e.g. llama3.3, qwen2.5-coder" : "e.g. gpt-4.1-mini"}
+                className="flex-1 px-3 py-2.5 rounded-lg border border-neutral-700 bg-surface-2 text-sm text-neutral-200 font-mono focus:outline-none focus:border-neutral-500"
+              />
+              <button
+                onClick={() => assignment.provider && refreshModels(assignment.provider)}
+                disabled={discovering}
+                title="Refresh available models"
+                className="px-3 py-2 rounded-lg border border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200 transition-colors text-xs disabled:opacity-50"
+              >
+                {discovering ? "…" : "↻"}
+              </button>
+            </div>
+            <datalist id={`models-${role.key}`}>
+              {discovered.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
             <p className="text-[11px] text-neutral-600 mt-1.5">
-              Model name as known by {activeProvider?.label ?? assignment.provider}
+              {discovered.length > 0
+                ? `${discovered.length} models discovered on ${activeProvider?.label ?? assignment.provider}`
+                : `Model name as known by ${activeProvider?.label ?? assignment.provider}`}
             </p>
           </>
         ) : (
@@ -232,11 +278,37 @@ function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
         )}
       </div>
 
-      {/* Effort Selector (Claude CLI only) */}
-      {assignment.provider ? (
+      {/* Thinking toggle (provider chat calls) */}
+      {assignment.provider && !toolBound && (
+        <div className="px-5 pb-3">
+          <label className="text-xs text-neutral-500 mb-2 block">Thinking</label>
+          <div className="flex gap-1.5">
+            {([["Default", null], ["On", true], ["Off", false]] as const).map(([label, value]) => (
+              <button
+                key={label}
+                onClick={() => updateRoleThinking(role.key, value)}
+                className={cn(
+                  "flex-1 px-2 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                  (assignment.thinking ?? null) === value
+                    ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400"
+                    : "border-neutral-800 text-neutral-500 hover:text-neutral-300 hover:border-neutral-700"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-neutral-600 mt-1.5">
+            Reasoning control where supported (Ollama think, OpenRouter reasoning).
+          </p>
+        </div>
+      )}
+
+      {/* Effort Selector (applies to the Claude CLI, incl. agent-harness runs) */}
+      {assignment.provider && !toolBound ? (
         <div className="px-5 pb-5">
           <p className="text-[11px] text-neutral-600">
-            Effort levels apply to Claude models only.
+            Effort levels apply to Claude CLI runs only.
           </p>
         </div>
       ) : (
@@ -342,6 +414,22 @@ function ProvidersSection({
   const [testModels, setTestModels] = useState<Record<string, string>>({});
   const [testResults, setTestResults] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState<string | null>(null);
+  const [modelLists, setModelLists] = useState<Record<string, string[]>>({});
+  const [loadingModels, setLoadingModels] = useState<string | null>(null);
+
+  const loadModels = async (providerId: string) => {
+    setLoadingModels(providerId);
+    try {
+      const { listProviderModels } = await import("../lib/tauri");
+      const models = await listProviderModels(providerId);
+      setModelLists((m) => ({ ...m, [providerId]: models }));
+      setTestResults((r) => ({ ...r, [providerId]: `${models.length} models available` }));
+    } catch (e) {
+      setTestResults((r) => ({ ...r, [providerId]: String(e) }));
+    } finally {
+      setLoadingModels(null);
+    }
+  };
 
   useEffect(() => {
     import("../lib/tauri").then(({ getProviderProfiles }) =>
@@ -393,6 +481,15 @@ function ProvidersSection({
     updateConfig({
       ...config,
       providers: profiles.map((p) => (p.id === providerId ? { ...p, base_url: baseUrl } : p)),
+    });
+  };
+
+  const updateAgentUrl = (providerId: string, url: string) => {
+    updateConfig({
+      ...config,
+      providers: profiles.map((p) =>
+        p.id === providerId ? { ...p, anthropic_base_url: url.trim() === "" ? null : url } : p
+      ),
     });
   };
 
@@ -453,16 +550,42 @@ function ProvidersSection({
                 </div>
               </div>
             )}
-            <div className={p.requires_key ? "md:col-span-2" : ""}>
+            <div>
+              <label className="text-[11px] text-neutral-600 block mb-1">
+                Agent endpoint (Anthropic-compatible, optional)
+              </label>
+              <input
+                type="text"
+                value={p.anthropic_base_url ?? ""}
+                onChange={(e) => updateAgentUrl(p.id, e.target.value)}
+                placeholder="http://localhost:11434 (lets agent roles use this provider)"
+                className="w-full px-2.5 py-1.5 rounded-lg border border-neutral-800 bg-surface-0 text-xs text-neutral-300 font-mono focus:outline-none focus:border-neutral-600"
+              />
+            </div>
+            <div className="md:col-span-2">
               <label className="text-[11px] text-neutral-600 block mb-1">Test (model name)</label>
               <div className="flex gap-1.5">
                 <input
                   type="text"
+                  list={`test-models-${p.id}`}
                   value={testModels[p.id] ?? ""}
                   onChange={(e) => setTestModels((m) => ({ ...m, [p.id]: e.target.value }))}
                   placeholder={p.local ? "llama3.3" : p.id === "openrouter" ? "openai/gpt-4.1-mini" : "gpt-4.1-mini"}
                   className="flex-1 px-2.5 py-1.5 rounded-lg border border-neutral-800 bg-surface-0 text-xs text-neutral-300 font-mono focus:outline-none focus:border-neutral-600"
                 />
+                <datalist id={`test-models-${p.id}`}>
+                  {(modelLists[p.id] ?? []).map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+                <button
+                  onClick={() => loadModels(p.id)}
+                  disabled={loadingModels !== null}
+                  title="Discover available models"
+                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-neutral-700 text-neutral-300 hover:border-neutral-500 transition-colors disabled:opacity-50"
+                >
+                  {loadingModels === p.id ? "…" : "↻ models"}
+                </button>
                 <button
                   onClick={() => runTest(p.id)}
                   disabled={testing !== null}

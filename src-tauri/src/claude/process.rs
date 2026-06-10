@@ -148,9 +148,14 @@ pub struct ClaudeProcessOptions {
     /// (`.claudorchestrator/usage.jsonl`) attributed to this task/epic.
     pub usage: Option<crate::storage::usage::UsageContext>,
     /// BYO provider id (e.g. "openai", "openrouter", "ollama"). None = the
-    /// Claude CLI. Only tool-free calls are routed; calls that need agent
-    /// tools always run on the CLI regardless of this field.
+    /// Claude CLI. Tool-free calls route to the provider's chat API; calls
+    /// that need agent tools keep the Claude CLI harness — and when the
+    /// provider exposes an Anthropic-compatible endpoint (Ollama does), the
+    /// CLI's inference is pointed there via ANTHROPIC_BASE_URL.
     pub provider: Option<String>,
+    /// Reasoning/thinking toggle for provider-routed calls (Ollama `think`,
+    /// OpenRouter `reasoning`). None = the model's default behavior.
+    pub thinking: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -188,9 +193,14 @@ pub async fn run_claude_with_callback(
     opts: ClaudeProcessOptions,
     mut on_event: StreamCallback,
 ) -> Result<ClaudeResult> {
-    // BYO provider routing: tool-free calls can run on an OpenAI-compatible
-    // provider (OpenAI/OpenRouter/Ollama/LM Studio/custom). Anything that
-    // needs agent tools always uses the Claude CLI.
+    // BYO provider routing:
+    // - Tool-free calls run on the provider's OpenAI-compatible chat API.
+    // - Tool-needing calls keep the Claude CLI harness; if the provider has
+    //   an Anthropic-compatible endpoint (Ollama natively, or a proxy), the
+    //   CLI's inference is redirected there via ANTHROPIC_BASE_URL — local
+    //   models powering the full agent harness.
+    let mut harness_envs: Vec<(String, String)> = Vec::new();
+    let mut ledger_cost_source = "cli".to_string();
     if let Some(ref provider_id) = opts.provider {
         let needs_tools = opts
             .allowed_tools
@@ -201,10 +211,33 @@ pub async fn run_claude_with_callback(
             let provider_id = provider_id.clone();
             return crate::providers::run_chat(&provider_id, &opts, on_event).await;
         }
-        eprintln!(
-            "[providers] call requires agent tools — using Claude CLI instead of provider '{}'",
-            provider_id
-        );
+        match crate::providers::resolve_profile(provider_id) {
+            Some(profile) if profile.anthropic_base_url.is_some() => {
+                let base = profile.anthropic_base_url.clone().unwrap();
+                let token = crate::providers::get_api_key(provider_id)
+                    .unwrap_or_else(|| "local".to_string());
+                harness_envs.push(("ANTHROPIC_BASE_URL".to_string(), base));
+                harness_envs.push(("ANTHROPIC_AUTH_TOKEN".to_string(), token));
+                // The CLI must not try to use the stored OAuth session when
+                // talking to a third-party endpoint.
+                harness_envs.push(("ANTHROPIC_API_KEY".to_string(), String::new()));
+                if profile.local {
+                    ledger_cost_source = "free_local".to_string();
+                }
+                let _ = on_event(FrontendStreamEvent::Status {
+                    message: format!(
+                        "Agent harness: Claude CLI tools + {} inference ({})",
+                        profile.label, opts.model_id
+                    ),
+                });
+            }
+            _ => {
+                eprintln!(
+                    "[providers] provider '{}' has no Anthropic-compatible endpoint — agent call uses the Claude subscription",
+                    provider_id
+                );
+            }
+        }
     }
 
     clear_cancel();
@@ -272,13 +305,21 @@ pub async fn run_claude_with_callback(
     // Don't inject tokens from the credentials file — they may be expired.
     // The user must authenticate via `claude auth login` first.
 
-    let mut child = Command::new(&claude_bin)
+    let mut command = Command::new(&claude_bin);
+    command
         .args(&args)
         .current_dir(&opts.working_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+        .stderr(Stdio::piped());
+    for (key, value) in &harness_envs {
+        if value.is_empty() {
+            command.env_remove(key);
+        } else {
+            command.env(key, value);
+        }
+    }
+    let mut child = command.spawn()?;
 
     // Pipe the prompt via stdin (avoids Windows 32K command-line limit)
     if let Some(mut stdin) = child.stdin.take() {
@@ -494,7 +535,7 @@ pub async fn run_claude_with_callback(
                 session_id: session_id.clone(),
                 tokens_in: cli_tokens_in,
                 tokens_out: cli_tokens_out,
-                cost_source: "cli".to_string(),
+                cost_source: ledger_cost_source,
             },
         );
     }

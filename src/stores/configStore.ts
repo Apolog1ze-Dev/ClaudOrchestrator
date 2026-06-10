@@ -115,6 +115,8 @@ interface ConfigStore {
   updateRoleEffort: (role: ModelRole, effort: EffortLevel) => void;
   /** Assign a BYO provider to a role (null = Claude subscription via CLI) */
   updateRoleProvider: (role: ModelRole, provider: string | null) => void;
+  /** Set the role's thinking/reasoning toggle (null = model default) */
+  updateRoleThinking: (role: ModelRole, thinking: boolean | null) => void;
 
   /** Load persisted config from disk for a workspace */
   loadPersistedConfig: (targetDir: string) => Promise<void>;
@@ -244,6 +246,18 @@ export const useConfigStore = create<ConfigStore>()(
         models: {
           ...state.config.models,
           [role]: { ...state.config.models[role], provider },
+        },
+      },
+      isCustomConfig: true,
+    })),
+
+  updateRoleThinking: (role, thinking) =>
+    set((state) => ({
+      config: {
+        ...state.config,
+        models: {
+          ...state.config.models,
+          [role]: { ...state.config.models[role], thinking },
         },
       },
       isCustomConfig: true,

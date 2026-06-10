@@ -60,7 +60,8 @@ pub async fn execute_phase_streaming(
             streaming: true,
             session_resume: None,
             usage: Some(UsageContext::new("executor", Some(phase.epic_id.clone()))),
-            provider: None, // needs full agent tools — CLI only
+            provider: config.models.executor.provider.clone(), // tools stay on the CLI harness; Anthropic-compatible providers power its inference
+            thinking: None,
         },
         on_event,
     )

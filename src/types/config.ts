@@ -46,6 +46,8 @@ export interface ModelAssignment {
   /** BYO provider id ("openai" | "openrouter" | "ollama" | "lmstudio" | "custom").
    * null/undefined = Claude subscription via the CLI. */
   provider?: string | null;
+  /** Reasoning/thinking toggle for provider-routed calls. null = model default. */
+  thinking?: boolean | null;
 }
 
 /** A BYO provider endpoint (keys live in the OS keychain, never here) */
@@ -55,6 +57,9 @@ export interface ProviderProfile {
   base_url: string;
   requires_key: boolean;
   local?: boolean;
+  /** Anthropic-compatible endpoint (serves /v1/messages). When set, this
+   * provider can power agent roles through the Claude CLI harness. */
+  anthropic_base_url?: string | null;
 }
 
 export interface ProviderInfo extends ProviderProfile {

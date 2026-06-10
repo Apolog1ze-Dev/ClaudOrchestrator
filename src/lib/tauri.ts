@@ -84,6 +84,10 @@ export async function testProvider(
   return invoke("test_provider", { providerId, model, targetDir: targetDir ?? null });
 }
 
+export async function listProviderModels(providerId: string): Promise<string[]> {
+  return invoke("list_provider_models", { providerId });
+}
+
 export async function getDefaultConfig(): Promise<AppConfig> {
   return invoke("get_default_config");
 }

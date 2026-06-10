@@ -104,6 +104,7 @@ pub fn run() {
             commands::provider_commands::get_provider_profiles,
             commands::provider_commands::set_provider_key,
             commands::provider_commands::test_provider,
+            commands::provider_commands::list_provider_models,
             // Hand-off commands
             commands::handoff_commands::generate_handoff_bundle,
             commands::handoff_commands::detect_handoff_targets,

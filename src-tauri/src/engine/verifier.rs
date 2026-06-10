@@ -130,6 +130,7 @@ pub async fn verify_phase(
                 session_resume: None,
                 usage: Some(UsageContext::new("verifier_diff", Some(phase.epic_id.clone()))),
                 provider: config.models.verifier.provider.clone(),
+                thinking: config.models.verifier.thinking,
             })
             .await?;
 

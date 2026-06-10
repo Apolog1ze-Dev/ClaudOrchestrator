@@ -31,6 +31,12 @@ pub fn set_provider_key(provider_id: String, key: String) -> Result<(), String> 
     providers::set_api_key(&provider_id, &key).map_err(|e| e.to_string())
 }
 
+/// Dynamic model discovery from the provider's /models endpoint.
+#[tauri::command]
+pub async fn list_provider_models(provider_id: String) -> Result<Vec<String>, String> {
+    providers::list_models(&provider_id).await.map_err(|e| e.to_string())
+}
+
 /// Connectivity/auth probe: one tiny completion against the provider.
 #[tauri::command]
 pub async fn test_provider(

@@ -32,7 +32,8 @@ pub async fn analyze_codebase(
             streaming: true,
             session_resume: None,
             usage: Some(UsageContext::new("scout", None)),
-            provider: None, // needs Read/Glob/Grep tools — CLI only
+            provider: config.models.scout.provider.clone(), // tools stay on the CLI harness; Anthropic-compatible providers power its inference
+            thinking: None,
         },
         on_event,
     )

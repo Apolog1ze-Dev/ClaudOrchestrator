@@ -34,6 +34,13 @@ pub struct ProviderProfile {
     /// Local engines are hard-$0 — real, not estimated
     #[serde(default)]
     pub local: bool,
+    /// Anthropic-compatible endpoint (serves /v1/messages). When set, this
+    /// provider can power AGENT roles too: the Claude CLI keeps the tool
+    /// harness while ANTHROPIC_BASE_URL points inference here. Ollama ships
+    /// this natively; proxies (LiteLLM, claude-code-router) can provide it
+    /// for anything else.
+    #[serde(default)]
+    pub anthropic_base_url: Option<String>,
 }
 
 pub fn default_provider_profiles() -> Vec<ProviderProfile> {
@@ -44,6 +51,7 @@ pub fn default_provider_profiles() -> Vec<ProviderProfile> {
             base_url: "https://api.openai.com/v1".into(),
             requires_key: true,
             local: false,
+            anthropic_base_url: None,
         },
         ProviderProfile {
             id: "openrouter".into(),
@@ -51,6 +59,7 @@ pub fn default_provider_profiles() -> Vec<ProviderProfile> {
             base_url: "https://openrouter.ai/api/v1".into(),
             requires_key: true,
             local: false,
+            anthropic_base_url: None,
         },
         ProviderProfile {
             id: "ollama".into(),
@@ -58,6 +67,7 @@ pub fn default_provider_profiles() -> Vec<ProviderProfile> {
             base_url: "http://localhost:11434/v1".into(),
             requires_key: false,
             local: true,
+            anthropic_base_url: Some("http://localhost:11434".into()),
         },
         ProviderProfile {
             id: "lmstudio".into(),
@@ -65,6 +75,7 @@ pub fn default_provider_profiles() -> Vec<ProviderProfile> {
             base_url: "http://localhost:1234/v1".into(),
             requires_key: false,
             local: true,
+            anthropic_base_url: None,
         },
         ProviderProfile {
             id: "custom".into(),
@@ -72,6 +83,7 @@ pub fn default_provider_profiles() -> Vec<ProviderProfile> {
             base_url: "http://localhost:8080/v1".into(),
             requires_key: false,
             local: true,
+            anthropic_base_url: None,
         },
     ]
 }
@@ -180,6 +192,18 @@ pub async fn run_chat(
     if profile.id == "openrouter" {
         // OpenRouter: include real cost accounting in the final usage chunk.
         body["usage"] = serde_json::json!({ "include": true });
+    }
+    // Reasoning/thinking control where the provider supports it
+    if let Some(thinking) = opts.thinking {
+        match profile.id.as_str() {
+            "openrouter" => {
+                body["reasoning"] = serde_json::json!({ "enabled": thinking });
+            }
+            "ollama" => {
+                body["think"] = serde_json::json!(thinking);
+            }
+            _ => {} // others: leave the model's default behavior
+        }
     }
 
     let client = reqwest::Client::builder()
@@ -325,6 +349,50 @@ pub async fn run_chat(
     })
 }
 
+/// Dynamic model discovery: GET {base}/models (standard across OpenAI,
+/// OpenRouter, Ollama, LM Studio). Returns sorted model ids.
+pub async fn list_models(provider_id: &str) -> Result<Vec<String>> {
+    let profile = resolve_profile(provider_id)
+        .ok_or_else(|| anyhow::anyhow!("Unknown provider profile: {}", provider_id))?;
+
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(15))
+        .build()?;
+    let url = format!("{}/models", profile.base_url.trim_end_matches('/'));
+    let mut req = client.get(&url);
+    if let Some(key) = get_api_key(provider_id) {
+        req = req.bearer_auth(key);
+    }
+
+    let response = req.send().await.map_err(|e| {
+        anyhow::anyhow!(
+            "Could not reach {} at {} — {}{}",
+            profile.label,
+            url,
+            e,
+            if profile.local { " (is the local server running?)" } else { "" }
+        )
+    })?;
+    if !response.status().is_success() {
+        anyhow::bail!("{} returned {} from /models", profile.label, response.status());
+    }
+
+    let json: serde_json::Value = response.json().await?;
+    let mut models: Vec<String> = json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m.get("id").and_then(|v| v.as_str()).map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+    models.sort();
+    models.dedup();
+    Ok(models)
+}
+
 /// Quick connectivity/auth probe used by Settings → Test.
 #[derive(Debug, Clone, Serialize)]
 pub struct ProviderTestResult {
@@ -350,6 +418,7 @@ pub async fn test_provider(provider_id: &str, model: &str, working_dir: &str) ->
         session_resume: None,
         usage: None, // probes don't pollute the ledger
         provider: Some(provider_id.to_string()),
+        thinking: None,
     };
     match run_chat(provider_id, &opts, Box::new(|_| Ok(()))).await {
         Ok(result) => ProviderTestResult {
