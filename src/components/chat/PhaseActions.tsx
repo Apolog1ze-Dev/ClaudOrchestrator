@@ -1,9 +1,11 @@
-import { Loader2 } from "lucide-react";
+import { useState } from "react";
+import { Loader2, Share2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useOptionalEpicContext } from "../../contexts/EpicContext";
 import { useExecutionStore } from "../../stores/executionStore";
 import { useConfigStore } from "../../stores/configStore";
+import { HandoffDialog } from "../epic/HandoffDialog";
 
 export function PhaseActions() {
   const epicCtx = useOptionalEpicContext();
@@ -13,6 +15,7 @@ export function PhaseActions() {
   const executionStop = useExecutionStore((s) => s.stop);
   const executionCancel = useExecutionStore((s) => s.cancel);
   const targetDir = useConfigStore((s) => s.targetDir);
+  const [showHandoff, setShowHandoff] = useState(false);
 
   if (!epicCtx?.data) return null;
 
@@ -93,22 +96,52 @@ export function PhaseActions() {
 
   // Ready state
   if (step === "ready" && !executionRunning) {
+    // First not-yet-passed phase, for the copy-as-prompt shortcut
+    const nextPhase = (() => {
+      for (const ticket of data.tickets) {
+        for (const phase of data.phases_by_ticket[ticket.id] ?? []) {
+          if (phase.status !== "passed") {
+            return { ticketId: ticket.id, phaseId: phase.id, title: phase.title };
+          }
+        }
+      }
+      return null;
+    })();
+
     return (
       <div className="px-3 py-2 border-t border-neutral-800">
-        <button
-          onClick={() => {
-            // Kick off supervised execution, then show the stream view.
-            // (Navigation alone never started the run — the execution page
-            // is headless in the workspace layout.)
-            if (targetDir) {
-              void executionStart(data.epic.id, targetDir);
-            }
-            navigate(`/execute/${data.epic.id}`);
-          }}
-          className="w-full py-2 rounded-lg text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
-        >
-          Build
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              // Kick off supervised execution, then show the stream view.
+              // (Navigation alone never started the run — the execution page
+              // is headless in the workspace layout.)
+              if (targetDir) {
+                void executionStart(data.epic.id, targetDir);
+              }
+              navigate(`/execute/${data.epic.id}`);
+            }}
+            className="flex-1 py-2 rounded-lg text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+          >
+            Build
+          </button>
+          <button
+            onClick={() => setShowHandoff(true)}
+            title="Export the plan and execute it with another tool"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border border-neutral-700 text-neutral-300 hover:border-neutral-500 hover:text-white transition-colors"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            Hand off
+          </button>
+        </div>
+        {showHandoff && targetDir && (
+          <HandoffDialog
+            epicId={data.epic.id}
+            targetDir={targetDir}
+            nextPhase={nextPhase}
+            onClose={() => setShowHandoff(false)}
+          />
+        )}
       </div>
     );
   }

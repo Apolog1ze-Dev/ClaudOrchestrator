@@ -1,6 +1,7 @@
 mod commands;
 mod claude;
 mod engine;
+mod handoff;
 mod storage;
 mod types;
 mod updater;
@@ -98,6 +99,12 @@ pub fn run() {
             commands::chat_commands::chat_refine_apply,
             // Usage / budget commands
             commands::usage_commands::get_usage_summary,
+            // Hand-off commands
+            commands::handoff_commands::generate_handoff_bundle,
+            commands::handoff_commands::detect_handoff_targets,
+            commands::handoff_commands::launch_handoff_target,
+            commands::handoff_commands::build_handoff_phase_prompt,
+            commands::handoff_commands::sync_handoff_status,
             // Filesystem commands
             commands::filesystem_commands::list_directory_tree,
             commands::filesystem_commands::read_file_text,

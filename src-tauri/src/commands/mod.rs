@@ -7,3 +7,4 @@ pub mod verify_commands;
 pub mod chat_commands;
 pub mod filesystem_commands;
 pub mod usage_commands;
+pub mod handoff_commands;

@@ -694,7 +694,7 @@ pub async fn run_supervised_epic(
 /// "ready" wave, so ties keep the storage layer's priority order. Tickets in
 /// a dependency cycle (or depending on unknown ids in a cycle-like way) are
 /// appended in their original order rather than dropped.
-fn order_by_dependencies(tickets: Vec<Ticket>) -> Vec<Ticket> {
+pub(crate) fn order_by_dependencies(tickets: Vec<Ticket>) -> Vec<Ticket> {
     use std::collections::HashSet;
 
     let known_ids: HashSet<String> = tickets.iter().map(|t| t.id.clone()).collect();

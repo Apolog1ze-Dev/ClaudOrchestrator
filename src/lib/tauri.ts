@@ -342,6 +342,61 @@ export async function runSupervisedEpic(
   return invoke("run_supervised_epic", { epicId, targetDir, channel });
 }
 
+// ─── Hand-off Commands ───────────────────────────────────────────────────────
+
+export interface BundleSummary {
+  bundle_dir: string;
+  files_written: number;
+  tickets: number;
+  phases: number;
+}
+
+export interface TargetAvailability {
+  id: string;
+  label: string;
+  available: boolean;
+}
+
+export interface ExternalPhaseStatus {
+  phase_id: string;
+  ticket_id: string;
+  title: string;
+  internal_status: string;
+  external_done: boolean;
+  source: string;
+}
+
+export async function generateHandoffBundle(
+  epicId: string,
+  targetDir: string
+): Promise<BundleSummary> {
+  return invoke("generate_handoff_bundle", { epicId, targetDir });
+}
+
+export async function detectHandoffTargets(): Promise<TargetAvailability[]> {
+  return invoke("detect_handoff_targets");
+}
+
+export async function launchHandoffTarget(target: string, targetDir: string): Promise<void> {
+  return invoke("launch_handoff_target", { target, targetDir });
+}
+
+export async function buildHandoffPhasePrompt(
+  epicId: string,
+  ticketId: string,
+  phaseId: string,
+  targetDir: string
+): Promise<string> {
+  return invoke("build_handoff_phase_prompt", { epicId, ticketId, phaseId, targetDir });
+}
+
+export async function syncHandoffStatus(
+  epicId: string,
+  targetDir: string
+): Promise<ExternalPhaseStatus[]> {
+  return invoke("sync_handoff_status", { epicId, targetDir });
+}
+
 // ─── Verification Commands (Streaming) ───────────────────────────────────────
 
 export async function verifyPhase(
