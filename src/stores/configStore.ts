@@ -240,16 +240,31 @@ export const useConfigStore = create<ConfigStore>()(
     }),
 
   updateRoleProvider: (role, provider) =>
-    set((state) => ({
-      config: {
-        ...state.config,
-        models: {
-          ...state.config.models,
-          [role]: { ...state.config.models[role], provider },
+    set((state) => {
+      const prev = state.config.models[role];
+      let model_id = prev.model_id;
+      if (provider) {
+        // Fresh pick from the provider's discovered models — keeping the old
+        // Claude id would filter every suggestion list down to nothing.
+        model_id = "";
+      } else if (!state.availableModels.some((m) => m.id === prev.model_id)) {
+        // Back to Claude with a non-Claude id left over: restore a sane default
+        const preset = state.planInfo
+          ? PLAN_PRESETS[state.planInfo.plan] ?? PLAN_PRESETS.unknown
+          : null;
+        model_id = (preset ?? DEFAULT_CONFIG.models)[role].model_id;
+      }
+      return {
+        config: {
+          ...state.config,
+          models: {
+            ...state.config.models,
+            [role]: { ...prev, provider, model_id },
+          },
         },
-      },
-      isCustomConfig: true,
-    })),
+        isCustomConfig: true,
+      };
+    }),
 
   updateRoleThinking: (role, thinking) =>
     set((state) => ({

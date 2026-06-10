@@ -12,6 +12,7 @@ import { useState, useRef, useEffect } from "react";
 import { useConfigStore } from "../stores/configStore";
 import { saveConfig, saveGeneralConfig } from "../lib/tauri";
 import { cn } from "../lib/utils";
+import { StyledSelect, StyledCombo } from "../components/ui/Dropdown";
 import {
   FAMILY_META,
   EFFORT_META,
@@ -57,6 +58,7 @@ function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
   const updateRoleThinking = useConfigStore((s) => s.updateRoleThinking);
   const [discovered, setDiscovered] = useState<string[]>([]);
   const [discovering, setDiscovering] = useState(false);
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
   const isModelAvailable = useConfigStore((s) => s.isModelAvailable);
   const isMaxEffortPractical = useConfigStore((s) => s.isMaxEffortPractical);
   const [open, setOpen] = useState(false);
@@ -92,11 +94,13 @@ function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
 
   const refreshModels = async (providerId: string) => {
     setDiscovering(true);
+    setDiscoverError(null);
     try {
       const { listProviderModels } = await import("../lib/tauri");
       setDiscovered(await listProviderModels(providerId));
-    } catch {
+    } catch (e) {
       setDiscovered([]);
+      setDiscoverError(String(e));
     } finally {
       setDiscovering(false);
     }
@@ -121,18 +125,18 @@ function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
       {/* Provider (BYO) */}
       <div className="px-5 pb-3">
         <label className="text-xs text-neutral-500 mb-2 block">Provider</label>
-        <select
+        <StyledSelect
           value={assignment.provider ?? ""}
-          onChange={(e) => updateRoleProvider(role.key, e.target.value || null)}
-          className="w-full px-3 py-2.5 rounded-lg border border-neutral-700 bg-surface-2 text-sm text-neutral-200 focus:outline-none focus:border-neutral-500"
-        >
-          <option value="">Claude (subscription)</option>
-          {selectableProfiles.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </select>
+          onChange={(value) => updateRoleProvider(role.key, value || null)}
+          options={[
+            { value: "", label: "Claude (subscription)" },
+            ...selectableProfiles.map((p) => ({
+              value: p.id,
+              label: p.label,
+              hint: p.local ? "local · $0" : undefined,
+            })),
+          ]}
+        />
         {toolBound && (
           <p className="text-[11px] text-neutral-600 mt-1.5">
             Agent roles keep the Claude CLI tool harness — only providers with an
@@ -146,29 +150,21 @@ function ModelCard({ role }: { role: (typeof ROLES)[number] }) {
         <label className="text-xs text-neutral-500 mb-2 block">Model</label>
         {assignment.provider ? (
           <>
-            <div className="flex gap-1.5">
-              <input
-                type="text"
-                list={`models-${role.key}`}
-                value={assignment.model_id}
-                onChange={(e) => updateRoleModel(role.key, e.target.value)}
-                placeholder={activeProvider?.local ? "e.g. llama3.3, qwen2.5-coder" : "e.g. gpt-4.1-mini"}
-                className="flex-1 px-3 py-2.5 rounded-lg border border-neutral-700 bg-surface-2 text-sm text-neutral-200 font-mono focus:outline-none focus:border-neutral-500"
-              />
-              <button
-                onClick={() => assignment.provider && refreshModels(assignment.provider)}
-                disabled={discovering}
-                title="Refresh available models"
-                className="px-3 py-2 rounded-lg border border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200 transition-colors text-xs disabled:opacity-50"
-              >
-                {discovering ? "…" : "↻"}
-              </button>
-            </div>
-            <datalist id={`models-${role.key}`}>
-              {discovered.map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
+            <StyledCombo
+              value={assignment.model_id}
+              onChange={(value) => updateRoleModel(role.key, value)}
+              options={discovered}
+              loading={discovering}
+              error={discoverError}
+              placeholder={activeProvider?.local ? "e.g. llama3.3, qwen2.5-coder" : "e.g. gpt-4.1-mini"}
+              onOpen={() => {
+                if (discovered.length === 0 && !discovering && assignment.provider) {
+                  refreshModels(assignment.provider);
+                }
+              }}
+              onRefresh={() => assignment.provider && refreshModels(assignment.provider)}
+              emptyText={`No models reported by ${activeProvider?.label ?? assignment.provider} — type a name manually`}
+            />
             <p className="text-[11px] text-neutral-600 mt-1.5">
               {discovered.length > 0
                 ? `${discovered.length} models discovered on ${activeProvider?.label ?? assignment.provider}`
@@ -423,7 +419,6 @@ function ProvidersSection({
       const { listProviderModels } = await import("../lib/tauri");
       const models = await listProviderModels(providerId);
       setModelLists((m) => ({ ...m, [providerId]: models }));
-      setTestResults((r) => ({ ...r, [providerId]: `${models.length} models available` }));
     } catch (e) {
       setTestResults((r) => ({ ...r, [providerId]: String(e) }));
     } finally {
@@ -564,32 +559,24 @@ function ProvidersSection({
             </div>
             <div className="md:col-span-2">
               <label className="text-[11px] text-neutral-600 block mb-1">Test (model name)</label>
-              <div className="flex gap-1.5">
-                <input
-                  type="text"
-                  list={`test-models-${p.id}`}
+              <div className="flex gap-1.5 items-start">
+                <StyledCombo
+                  className="flex-1"
                   value={testModels[p.id] ?? ""}
-                  onChange={(e) => setTestModels((m) => ({ ...m, [p.id]: e.target.value }))}
+                  onChange={(value) => setTestModels((m) => ({ ...m, [p.id]: value }))}
+                  options={modelLists[p.id] ?? []}
+                  loading={loadingModels === p.id}
                   placeholder={p.local ? "llama3.3" : p.id === "openrouter" ? "openai/gpt-4.1-mini" : "gpt-4.1-mini"}
-                  className="flex-1 px-2.5 py-1.5 rounded-lg border border-neutral-800 bg-surface-0 text-xs text-neutral-300 font-mono focus:outline-none focus:border-neutral-600"
+                  onOpen={() => {
+                    if (!(modelLists[p.id]?.length) && loadingModels === null) loadModels(p.id);
+                  }}
+                  onRefresh={() => loadModels(p.id)}
+                  emptyText="No models reported — type a name manually"
                 />
-                <datalist id={`test-models-${p.id}`}>
-                  {(modelLists[p.id] ?? []).map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
-                <button
-                  onClick={() => loadModels(p.id)}
-                  disabled={loadingModels !== null}
-                  title="Discover available models"
-                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-neutral-700 text-neutral-300 hover:border-neutral-500 transition-colors disabled:opacity-50"
-                >
-                  {loadingModels === p.id ? "…" : "↻ models"}
-                </button>
                 <button
                   onClick={() => runTest(p.id)}
                   disabled={testing !== null}
-                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors disabled:opacity-50"
+                  className="px-3 py-2.5 rounded-lg text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors disabled:opacity-50"
                 >
                   {testing === p.id ? "Testing…" : "Test"}
                 </button>
