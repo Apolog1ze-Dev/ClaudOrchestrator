@@ -2,7 +2,9 @@
 
 The idea: reusable, curated **frameworks for specific development jobs** that get injected
 into the planning/execution pipeline — better design documents, better test plans, better
-architecture — packaged as content, with the premium library as the supporter-tier perk.
+architecture. **Skill packs are the paid tier's feature: direct pipeline upgrades reserved
+for paying customers.** The free pipeline is complete and honest on standard prompts;
+paying unlocks the boosted pipeline.
 
 ---
 
@@ -15,10 +17,11 @@ architecture — packaged as content, with the premium library as the supporter-
 - Planning calls (specs, design doc, phase plans) are prompt-rendered in `prompts.rs` via
   Handlebars — a pack is just additional context injected into the right template at the
   right stage. Also zero new runtime.
-- This is **content, not capability**: the app stays fully functional without packs, which
-  keeps the freeware ethos intact while giving the supporter tier something genuinely
-  valuable ("Skill-boosted epics"). Content libraries are also the one paid surface that
-  doesn't rot when Anthropic ships more native orchestration features.
+- As the paid tier's flagship: the free app remains a complete orchestrator on standard
+  prompts, and "Skill-boosted epics" is a crisp, demonstrable upgrade — measurably better
+  design docs, architecture, and test plans on the same epic. Expert-curated frameworks
+  are also the one paid surface that doesn't rot when Anthropic ships more native
+  orchestration features.
 
 ## 2. Pack anatomy
 
@@ -82,25 +85,35 @@ hand it to `render_prompt` as one more variable. ~300 lines plus template touch-
   and remediation use the same frameworks.
 - Settings gets a Packs page: installed packs, tier badges, custom-pack folder location.
 
-## 5. Tier model ("Skill-boosted epics")
+## 5. Tier model ("Skill-boosted epics" — paid-exclusive)
 
-- **Free**: the engine, pack loading, custom/user-authored packs, and 2–3 starter packs
-  (generic test patterns, generic design checklist) — so the feature is honest, documented,
-  and testable by everyone.
-- **Supporter**: the curated library (per-platform design frameworks, per-language
-  architecture packs, domain packs like game/CLI/API/dashboard) + early access to new
-  packs. License check stays offline-tolerant; packs are static content shipped in the
-  supporter build or downloaded once — no server dependency at runtime.
-- Authoring pipeline: packs are markdown in a public-spec format, so the community can
-  author and share free packs — which markets the premium library.
+- **Free**: the standard pipeline, unchanged. No pack injection. The UI may *show* the
+  suggested-pack chips greyed with a "Skill-boosted epic (paid)" tag after scouting — the
+  upgrade is visible at exactly the moment it would help, never nagging elsewhere.
+- **Paid**: the entire skill system — pack injection at every stage, the curated library
+  (per-platform design frameworks, per-language architecture packs, domain packs like
+  game/CLI/API/dashboard), custom/user-authored packs, and new-pack drops.
+- **Delivery**: packs are NOT bundled in the free binary. A valid license fetches the
+  library once (signed archive from the release infrastructure) into the app data dir;
+  fully offline afterwards. License check stays offline-tolerant — the gate is honest,
+  not DRM theater: in a local app the real product is the curated, maintained, versioned
+  library, and updates flow only to license holders.
+- Epic JSON records which packs boosted it, so a boosted epic re-opened without a license
+  still displays its provenance (and re-planning without the license falls back to
+  standard prompts with a notice).
 
-## 6. MVP slice (~1 week)
+## 6. MVP slice (~1 week, gating included from day one)
 
-1. Registry + manifest + bundled `packs/` dir (2 starter packs).
-2. Injection into design-spec + phase-planning templates only.
-3. Pack chips on the epic page post-scout; ids persisted on the Epic.
-4. Executor-side `SKILL.md` drop into the target project (one-line: copy on build start).
-5. Defer: verification checklists, clarify objectives, Settings page, tier gating.
+1. Registry + manifest + packs dir in app data (2 launch packs to prove the format).
+2. License flag (`config.license_key` validated offline) gating the registry — without it
+   the registry resolves empty and the pipeline is byte-identical to today.
+3. Injection into design-spec + phase-planning templates only.
+4. Pack chips on the epic page post-scout (greyed + tagged for free users); ids persisted
+   on the Epic.
+5. Executor-side `SKILL.md` drop into the target project (copy on build start, `claudorch-*`
+   prefixed, cleaned up after).
+6. Defer: verification checklists, clarify objectives, Settings packs page, the download
+   service (launch packs can ship inside the paid license bundle initially).
 
 ## 7. Open questions
 
