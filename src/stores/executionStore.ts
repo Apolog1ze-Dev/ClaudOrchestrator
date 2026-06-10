@@ -7,6 +7,7 @@ import {
   respondToApproval,
 } from "../lib/tauri";
 import type { FrontendStreamEvent } from "../types/execution";
+import { appendCoalesced } from "../lib/streamBridge";
 
 export interface PhaseInfo {
   id: string;
@@ -90,7 +91,8 @@ function bufferStreamEvent(event: FrontendStreamEvent) {
       const batch = _eventBuffer;
       _eventBuffer = [];
       useExecutionStore.setState((s) => ({
-        streamEvents: [...s.streamEvents, ...batch],
+        // Coalesce token deltas so the list doesn't grow per streamed token
+        streamEvents: appendCoalesced(s.streamEvents, batch),
       }));
     });
   }

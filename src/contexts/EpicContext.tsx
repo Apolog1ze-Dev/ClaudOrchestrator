@@ -27,7 +27,7 @@ import type { EpicFull } from "../lib/tauri";
 import type { FrontendStreamEvent } from "../types/execution";
 import type { ClarifyingQA, PlanningStep } from "../types/epic";
 import { useChatStore } from "../stores/chatStore";
-import { extractChatNarrative } from "../lib/streamBridge";
+import { extractChatNarrative, appendCoalesced } from "../lib/streamBridge";
 
 export interface EpicContextValue {
   data: EpicFull | null;
@@ -228,13 +228,25 @@ export function EpicProvider({ children }: { children: React.ReactNode }) {
   // When RAF fires, flush all buffered events to state in one render.
   const addEvent = useCallback((event: FrontendStreamEvent) => {
     eventBufferRef.current.push(event);
-    allEventsRef.current.push(event);
+    // Coalesce token deltas in the keep-everything ref (plain array, safe to
+    // mutate) so it doesn't grow one entry per streamed token.
+    const all = allEventsRef.current;
+    const last = all[all.length - 1];
+    if (
+      last &&
+      ((event.kind === "text" && last.kind === "text") ||
+        (event.kind === "thinking" && last.kind === "thinking"))
+    ) {
+      all[all.length - 1] = { ...last, content: last.content + event.content };
+    } else {
+      all.push(event);
+    }
     if (rafRef.current === null) {
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null;
         const batch = eventBufferRef.current;
         eventBufferRef.current = [];
-        setStreamEvents((prev) => [...prev, ...batch]);
+        setStreamEvents((prev) => appendCoalesced(prev, batch));
       });
     }
   }, []);

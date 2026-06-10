@@ -161,8 +161,9 @@ export function StreamView({ source = "planning" }: StreamViewProps) {
         break;
 
       case "thinking":
+        // End any text run, then ACCUMULATE — flushing here would emit one
+        // block per thinking event (one per token with deltas enabled).
         flushText(`text-${i}`);
-        flushThinking(`thinking-${i}`, false);
         thinkingBuffer += event.content;
         break;
 
