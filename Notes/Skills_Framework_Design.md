@@ -77,19 +77,31 @@ resources + a user dir for custom packs), filter by `applies_to` against scout o
 objective keywords, render selected packs' stage files into a single context block, and
 hand it to `render_prompt` as one more variable. ~300 lines plus template touch-ups.
 
-## 4. Selection UX
+## 4. Selection — automatic, AI-driven, invisible
 
-- After scouting, the epic page shows **suggested packs** (matched on language/platform/
-  keywords) as toggle chips: "Web Dashboard Design ⚡", "Node Test Patterns".
-- Selected pack ids persist on the Epic (`skill_pack_ids: Vec<String>`), so re-planning
-  and remediation use the same frameworks.
-- Settings gets a Packs page: installed packs, tier badges, custom-pack folder location.
+The user never sees or chooses packs; the pipeline picks them.
+
+- **Candidate filter (deterministic, free):** manifest `applies_to` matched against the
+  scout report (languages, platforms) and the objective/enhanced_objective keywords.
+  Typically narrows the library to 2-4 candidates.
+- **Final pick (AI, zero extra calls):** the candidate catalog (id + one-line description)
+  is appended to the FIRST planning call after clarify (PRD generation), and the
+  structured-output schema gains a `selected_packs: string[]` field — the model activates
+  what's genuinely relevant as a by-product of work it was already doing.
+- Selected pack ids + content hashes persist on the Epic (`skill_pack_ids`), so spec
+  regeneration, phase planning, execution, and remediation all use the same frameworks
+  consistently without re-deciding.
+- **Visibility:** nothing interactive anywhere. A boosted epic carries a small passive
+  "Skill-boosted" badge with the pack names in the epic header (provenance + quiet
+  marketing); free-tier users see nothing during the flow at all.
+- Settings keeps only a minimal Packs page: library status, version, license state —
+  informational, not a selection surface.
 
 ## 5. Tier model ("Skill-boosted epics" — paid-exclusive)
 
-- **Free**: the standard pipeline, unchanged. No pack injection. The UI may *show* the
-  suggested-pack chips greyed with a "Skill-boosted epic (paid)" tag after scouting — the
-  upgrade is visible at exactly the moment it would help, never nagging elsewhere.
+- **Free**: the standard pipeline, unchanged. No pack injection, no pack UI — free users
+  simply run the standard pipeline. (Marketing the tier happens outside the working flow:
+  site, README, release notes — not in-app nagging.)
 - **Paid**: the entire skill system — pack injection at every stage, the curated library
   (per-platform design frameworks, per-language architecture packs, domain packs like
   game/CLI/API/dashboard), custom/user-authored packs, and new-pack drops.
@@ -108,8 +120,8 @@ hand it to `render_prompt` as one more variable. ~300 lines plus template touch-
 2. License flag (`config.license_key` validated offline) gating the registry — without it
    the registry resolves empty and the pipeline is byte-identical to today.
 3. Injection into design-spec + phase-planning templates only.
-4. Pack chips on the epic page post-scout (greyed + tagged for free users); ids persisted
-   on the Epic.
+4. Auto-selection: deterministic candidate filter + `selected_packs` in the PRD call's
+   structured output; ids + hashes persisted on the Epic; passive "Skill-boosted" badge.
 5. Executor-side `SKILL.md` drop into the target project (copy on build start, `claudorch-*`
    prefixed, cleaned up after).
 6. Defer: verification checklists, clarify objectives, Settings packs page, the download
